@@ -1,0 +1,90 @@
+# Node.js / Next.js
+/node_modules/
+/.pnp
+.pnp.js
+/.next/
+/out/
+/build
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+
+# PEM files (private keys)
+*.pem
+
+# Environment files
+.env
+.env*.local
+
+# Vercel
+.vercel
+
+# Coverage reports
+/coverage
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pdb
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+*.manifest
+*.spec
+*.log
+*.sqlite3
+*.db
+*.sqlite
+*.env
+venv/
+env/
+ENV/
+.venv/
+.python-version
+
+# Python virtual environments
+venv/
+env/
+.venv/
+
+# Python bytecode cache
+__pycache__/
+
+# Content storage (JSON files saved by backend)
+crewai-service/content_storage/
+crewai-service/content_storage/*
+
+# Uvicorn logs (if any)
+*.log
+
+# IDE/editor files (optional, add your own if needed)
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# MacOS files
+.DS_Store
+
+# Optional: Prisma client generated files
+prisma/client/
+
+# Optional: NextAuth secret files (if any)
+.nextauth.secret
+
+# Optional: Prisma migrations (if you want to ignore migrations folder, but usually you commit it)
+# prisma/migrations/
