@@ -86,6 +86,48 @@ class ContentStorage:
         except Exception as e:
             print(f"❌ Error deleting content: {e}")
             return False
+
+    def rename_agent(self, old_agent_id: str, new_agent_id: str) -> bool:
+        """
+        Rename content file from old agent ID to new agent ID.
+        Useful when converting temporary agent (from scraping) to permanent one.
+        """
+        try:
+            old_path = self._get_file_path(old_agent_id)
+            new_path = self._get_file_path(new_agent_id)
+            
+            if not old_path.exists():
+                print(f"⚠️  Content file for {old_agent_id} not found")
+                return False
+            
+            # If new path exists, delete it first (overwrite)
+            if new_path.exists():
+                print(f"⚠️  Overwriting existing content for {new_agent_id}")
+                new_path.unlink()
+            
+            # Rename file
+            old_path.rename(new_path)
+            
+            # Update internal JSON data to reflect new agent ID
+            try:
+                with open(new_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                if 'agent_id' in data:
+                    data['agent_id'] = new_agent_id
+                    
+                    with open(new_path, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, indent=2, ensure_ascii=False)
+            except Exception as e:
+                print(f"⚠️  Failed to update agent_id inside JSON: {e}")
+                # Continue anyway as file is renamed
+            
+            print(f"✅ Renamed content file from {old_agent_id} to {new_agent_id}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error renaming content: {e}")
+            return False
     
     def get_content_chunks(self, agent_id: str, chunk_size: int = 1000) -> List[Dict[str, Any]]:
         """

@@ -55,9 +55,7 @@ async def example_complete_rag_flow():
     for question in questions:
         print(f"\n❓ Question: {question}")
         result = rag_agent.answer(
-            query=question,
-            top_k=5,
-            confidence_threshold=0.35
+            query=question
         )
         
         print(f"✅ Answer: {result['answer']}")
@@ -100,9 +98,7 @@ async def example_direct_usage():
     # Generate answer
     print(f"\n🤖 Generating answer...")
     result = rag_agent.answer(
-        query=query,
-        top_k=5,
-        confidence_threshold=0.35
+        query=query
     )
     
     print(f"✅ Answer: {result['answer']}")

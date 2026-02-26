@@ -8,11 +8,29 @@ from agents.qa_matcher import QAMatcherAgent
 from agents.response_generator import ResponseGeneratorAgent
 from agents.llm_agent import LLMAgent
 from agents.content_retriever import ContentRetrieverAgent
-from agents.company_extractor import extract_company_metadata, generate_company_greeting
-from scraper import WebsiteScraper, AsyncWebsiteScraper, ScrapeOptions
+from scraper import WebsiteScraper, AsyncWebsiteScraper, ScrapeOptions, AsyncScrapeOptions
 from content_storage import ContentStorage
 from rag_agent import RAGAgent
 import os
+from dotenv import load_dotenv
+import random
+from datetime import datetime
+import logging
+
+# Configure logging to suppress debug logs from third-party libraries
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+# Suppress debug logs from noisy third-party libraries
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('faiss').setLevel(logging.WARNING)
+logging.getLogger('sentence_transformers').setLevel(logging.WARNING)
+logging.getLogger('asyncio').setLevel(logging.WARNING)
+logging.getLogger('transformers').setLevel(logging.WARNING)
+logging.getLogger('huggingface_hub').setLevel(logging.WARNING)
 
 app = FastAPI(title="CrewAI Chat Service")
 
@@ -45,8 +63,8 @@ class ChatResponse(BaseModel):
 class ScrapeRequest(BaseModel):
     url: str
     agent_id: Optional[str] = None  # Agent ID to store content
-    max_pages: Optional[int] = 50
-    max_depth: Optional[int] = 3
+    max_pages: Optional[int] = 100 # Increased default
+    max_depth: Optional[int] = 5   # Increased default
     follow_external: Optional[bool] = False
     respect_robots: Optional[bool] = True
     delay: Optional[float] = 0.5
@@ -59,6 +77,8 @@ class ContentChatRequest(BaseModel):
     message: str
     agent_id: str
     confidence_threshold: float = 0.3
+    qa_pairs: Optional[List[QAPair]] = None
+    history: Optional[List[Dict[str, str]]] = None
 
 class ContentChatResponse(BaseModel):
     text: str
@@ -66,473 +86,143 @@ class ContentChatResponse(BaseModel):
     confidence: int
     sources: List[Dict[str, Any]] = []
 
+# Load environment variables
+load_dotenv()
+
 # Initialize agents
 intent_classifier = IntentClassifierAgent()
 qa_matcher = QAMatcherAgent()
 response_generator = ResponseGeneratorAgent()
 content_retriever = ContentRetrieverAgent()
 
-# Initialize LLM agent (optional - will work even if Ollama is not available)
-llm_model = os.getenv("OLLAMA_MODEL", "phi3:mini")  # Default to phi3:mini (3.8B, ~2GB)
-ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
-llm_agent = LLMAgent(model_name=llm_model, ollama_url=ollama_url)
+# Initialize LLM agent
+llm_provider = os.getenv("LLM_PROVIDER", "ollama").lower()
+
+if llm_provider == "xai":
+    llm_model = os.getenv("XAI_MODEL", "grok-3-mini")
+    api_key = os.getenv("XAI_API_KEY")
+    base_url = os.getenv("XAI_BASE_URL", "https://api.x.ai/v1")
+    print(f"🚀 Initializing LLM Agent with Cloud Provider: xAI (Model: {llm_model})")
+    llm_agent = LLMAgent(model_name=llm_model, provider="xai", api_key=api_key, base_url=base_url)
+elif llm_provider == "groq":
+    llm_model = os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile")
+    api_key = os.getenv("GROQ_API_KEY")
+    base_url = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+    print(f"🚀 Initializing LLM Agent with Cloud Provider: Groq (Model: {llm_model})")
+    llm_agent = LLMAgent(model_name=llm_model, provider="groq", api_key=api_key, base_url=base_url)
+else:
+    llm_model = os.getenv("OLLAMA_MODEL", "llama3")
+    ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
+    print(f"🚀 Initializing LLM Agent with Local Provider: Ollama (Model: {llm_model})")
+    llm_agent = LLMAgent(model_name=llm_model, provider="ollama", base_url=ollama_url)
 
 # Initialize content storage
 content_storage = ContentStorage()
 
-# Confidence thresholds
-# Minimum similarity that we still consider \"in-knowledge-base\" for this agent.
-# Lowered to 0.2 to act like we know everything and catch more matches
-MIN_KB_CONFIDENCE = 0.2
+# RAG Agent Registry (Cache to avoid re-init)
+rag_agent_registry = {}
 
-# LLM thresholds (only used when we're already above MIN_KB_CONFIDENCE)
-LLM_LOW_CONFIDENCE_THRESHOLD = 0.7  # Use LLM to help if confidence < 70%
-LLM_REFINE_THRESHOLD = 0.85  # Refine answer if confidence 70-85%
+def get_rag_agent(agent_id: str, base_company_info: str = "") -> RAGAgent:
+    """Get or create a RAG agent instance from cache"""
+    if agent_id not in rag_agent_registry:
+        print(f"🆕 Initializing new RAG Agent for: {agent_id}")
+        rag_agent_registry[agent_id] = RAGAgent(
+            agent_id=agent_id, 
+            llm_agent=llm_agent, 
+            base_company_info=base_company_info
+        )
+    return rag_agent_registry[agent_id]
+
+# Confidence thresholds
+MIN_KB_CONFIDENCE = 0.2
+LLM_LOW_CONFIDENCE_THRESHOLD = 0.7
+LLM_REFINE_THRESHOLD = 0.85
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    """
-    Process a user message using CrewAI agents to find intent and match Q&A pairs.
-    """
     try:
-        # Validate request
         if not request.message or not request.message.strip():
             raise HTTPException(status_code=400, detail="Message cannot be empty")
-        
-        # Convert Pydantic models to dictionaries
-        qa_pairs_dict = [qa.dict() for qa in request.qa_pairs]
-        
-        # Filter out invalid Q&A pairs
-        valid_qa_pairs = []
-        for qa in qa_pairs_dict:
-            if qa.get('question') and qa.get('answer'):
-                valid_qa_pairs.append(qa)
-            else:
-                print(f"Warning: Skipping invalid Q&A pair: {qa}")
-        
+
+        qa_pairs_dict = [qa.model_dump() for qa in request.qa_pairs]
+        valid_qa_pairs = [qa for qa in qa_pairs_dict if qa.get("question") and qa.get("answer")]
         qa_pairs_dict = valid_qa_pairs
-        
-        # Check for general conversation and greetings first
+
         message_lower = request.message.lower().strip()
-        greetings = ['hey', 'hi', 'hello', 'good morning', 'good afternoon', 'good evening', 'greetings', 'howdy', 'sup', "what's up"]
-        casual_conversation = ['how are you', "how's it going", "what's going on", 'how do you do', 'nice to meet you', 'thanks', 'thank you', 'bye', 'goodbye', 'see you']
-        question_words = ['what', 'when', 'where', 'who', 'why', 'how', 'which', 'can', 'could', 'would', 'should', 'is', 'are', 'do', 'does', 'did']
-        
-        is_greeting = any(g == message_lower or message_lower.startswith(g + ' ') or message_lower.endswith(' ' + g) for g in greetings)
+        greetings = [
+            "hey", "hi", "hello", "good morning", "good afternoon", "good evening",
+            "greetings", "howdy", "sup", "what's up",
+        ]
+        casual_conversation = [
+            "how are you", "how's it going", "what's going on", "how do you do",
+            "nice to meet you", "thanks", "thank you", "bye", "goodbye", "see you",
+        ]
+        question_words = [
+            "what", "when", "where", "who", "why", "how", "which", "can", "could",
+            "would", "should", "is", "are", "do", "does", "did",
+        ]
+
+        is_greeting = any(
+            g == message_lower or message_lower.startswith(g + " ") or message_lower.endswith(" " + g)
+            for g in greetings
+        )
         is_casual = any(c in message_lower for c in casual_conversation)
-        has_question = any(' ' + q + ' ' in message_lower or message_lower.startswith(q + ' ') or message_lower.endswith(' ' + q) for q in question_words)
-        
-        # If it's a pure greeting or casual conversation without a question, respond friendly
+        has_question = any(
+            " " + q + " " in message_lower or message_lower.startswith(q + " ") or message_lower.endswith(" " + q)
+            for q in question_words
+        )
+
+        # Simplified greeting response (no company extractor)
         if (is_greeting or is_casual) and not has_question:
-            # Try to get company-specific greeting from Q&A pairs context
-            # Extract company info from Q&A pairs if available
-            company_metadata = {}
-            if qa_pairs_dict:
-                # Try to infer company info from Q&A answers
-                for qa in qa_pairs_dict[:3]:  # Check first few Q&A pairs
-                    answer = qa.get('answer', '').lower()
-                    # Look for company name patterns in answers
-                    if 'technologies' in answer or 'solutions' in answer or 'services' in answer:
-                        # Extract potential company name
-                        import re
-                        match = re.search(r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', qa.get('answer', ''))
-                        if match:
-                            company_metadata['company_name'] = match.group(1)
-                            break
-            
-            # Generate company-specific greeting if we have metadata
-            if company_metadata.get('company_name'):
-                # Extract services from Q&A pairs
-                services = []
-                for qa in qa_pairs_dict[:5]:
-                    answer_lower = qa.get('answer', '').lower()
-                    if 'software' in answer_lower:
-                        services.append('software development')
-                    if 'website' in answer_lower or 'web' in answer_lower:
-                        services.append('website development')
-                    if 'marketing' in answer_lower:
-                        services.append('digital marketing')
-                    if 'app' in answer_lower:
-                        services.append('mobile app development')
-                
-                if services:
-                    company_metadata['services'] = list(set(services))[:3]
-                    response_text = generate_company_greeting(company_metadata)
-                else:
-                    # Fallback to generic but friendly greeting
-                    response_text = f"Hi! How can I help you today with {company_metadata.get('company_name')}? 😊"
-            else:
-                # Generic greeting responses
-                import random
-                greeting_responses = [
-                    "Hello! How can I help you?",
-                    "Hi there!",
-                    "Hello!",
-                    "Hi!"
-                ]
-                casual_responses = [
-                    "I'm doing well, thank you!",
-                    "You're welcome!",
-                    "Thanks!",
-                    "Thank you!"
-                ]
-                
-                response_text = random.choice(greeting_responses) if is_greeting else random.choice(casual_responses)
-            
-            intent_type = 'greeting' if is_greeting else 'casual'
-            
+            greeting_responses = [
+                "Hello! How can I help you?",
+                "Hi there!",
+                "Hello!",
+                "Hi!",
+            ]
+            casual_responses = [
+                "I'm doing well, thank you!",
+                "You're welcome!",
+                "Thanks!",
+                "Thank you!",
+            ]
+            response_text = random.choice(greeting_responses) if is_greeting else random.choice(casual_responses)
+            intent_type = "greeting" if is_greeting else "casual"
+
             return ChatResponse(
                 text=response_text,
                 intent=intent_type,
                 confidence=95 if is_greeting else 90,
                 matched_qa_pair=None,
             )
+
+        # Call RAG agent directly (UNIFIED FLOW)
+        # Try to get company info from stored content for 'general' agent
+        content_data = content_storage.load_content("general")
+        base_url = content_data.get("base_url", "") if content_data else ""
+        base_company_info = f"This is an AI support assistant for {base_url}" if base_url else "This is an AI support assistant."
         
-        # Step 1: Classify intent
-        intent_result = intent_classifier.classify(request.message, qa_pairs_dict)
+        # Use registry to avoid memory leaks
+        rag_agent = get_rag_agent("general", base_company_info)
         
-        # Step 2: Match Q&A pair (always try to match, regardless of intent confidence)
-        matched_pair = qa_matcher.find_match(
-            request.message,
-            qa_pairs_dict,
-            intent_result['intent']
+        result = rag_agent.answer(
+            query=request.message,
+            qa_pairs=qa_pairs_dict
         )
-        
-        # Use a more lenient threshold - if threshold is too high (like 1.0), cap it at 0.6 for conversational flexibility
-        # This allows the chatbot to handle general conversation even when user sets 100%
-        # Act like we know everything - minimum threshold of 0.2 (20%)
-        effective_threshold = min(request.confidence_threshold, 0.6) if request.confidence_threshold > 0.6 else request.confidence_threshold
-        effective_threshold = max(effective_threshold, 0.2)
-        
-        # If we have a matched pair
-        if matched_pair:
-            confidence_score = matched_pair['confidence']
-            top_matches = matched_pair.get('top_matches', [])
 
-            # Even if confidence is low, provide direct answer only
-            if confidence_score < MIN_KB_CONFIDENCE:
-                # Provide direct answer only
-                response_text = matched_pair['answer']
-                
-                print(
-                    f"🔄 Low confidence match ({confidence_score:.2%} < {MIN_KB_CONFIDENCE:.0%}), "
-                    f"providing direct answer."
-                )
-                return ChatResponse(
-                    text=response_text,
-                    intent=intent_result["intent"],
-                    confidence=int(confidence_score * 100),
-                    matched_qa_pair={
-                        "question": matched_pair["question"],
-                        "answer": matched_pair["answer"],
-                    },
-                )
-
-            # Decision logic for using LLM (only when we're above MIN_KB_CONFIDENCE)
-            if confidence_score < LLM_LOW_CONFIDENCE_THRESHOLD:
-                # Low/medium confidence (>= MIN_KB_CONFIDENCE but < 70%) -
-                # Use LLM to generate direct answer only
-                print(f"🤖 Using LLM with Q&A context (confidence: {confidence_score:.2%})")
-                llm_answer = llm_agent.generate_answer(
-                    user_query=request.message,
-                    top_qa_pairs=top_matches,
-                    context=None,
-                )
-                
-                # Use LLM answer directly without extra guidance
-                response_text = llm_answer
-
-                return ChatResponse(
-                    text=response_text,
-                    intent=intent_result["intent"],
-                    confidence=int(confidence_score * 100),  # Keep original confidence
-                    matched_qa_pair={
-                        "question": matched_pair["question"],
-                        "answer": matched_pair["answer"],
-                    },
-                )
-
-            if confidence_score < LLM_REFINE_THRESHOLD:
-                # Medium confidence (70-85%) - Refine answer with LLM, still constrained to Q&A.
-                print(f"✨ Refining answer with LLM (confidence: {confidence_score:.2%})")
-                original_answer = matched_pair["answer"]
-                refined_answer = llm_agent.refine_answer(
-                    user_query=request.message,
-                    matched_answer=original_answer,
-                    confidence=confidence_score,
-                )
-
-                return ChatResponse(
-                    text=refined_answer,
-                    intent=intent_result["intent"],
-                    confidence=int(confidence_score * 100),
-                    matched_qa_pair={
-                        "question": matched_pair["question"],
-                        "answer": matched_pair["answer"],
-                    },
-                )
-
-            # High confidence (>85%) - Use direct answer (fast path, no LLM)
-            print(f"⚡ Direct answer (confidence: {confidence_score:.2%} >= {LLM_REFINE_THRESHOLD:.0%})")
-            response = response_generator.generate(
-                request.message, matched_pair, intent_result["intent"]
-            )
-
-            confidence_value = int(confidence_score * 100)
-            confidence_value = max(0, min(100, confidence_value))
-
-            return ChatResponse(
-                text=response["text"],
-                intent=intent_result["intent"],
-                confidence=confidence_value,
-                matched_qa_pair={
-                    "question": matched_pair["question"],
-                    "answer": matched_pair["answer"],
-                },
-            )
-
-        # If no match found at all but the agent has Q&A, provide simple response
-        if qa_pairs_dict:
-            print("⚠️ No suitable Q&A match found.")
-            return ChatResponse(
-                text="I don't have information about that. Please ask a question related to the available topics.",
-                intent="no_match",
-                confidence=int(intent_result["confidence"] * 100),
-                matched_qa_pair=None,
-            )
-        
-        # If no Q&A pairs at all and intent confidence is too low
-        if intent_result['confidence'] < effective_threshold:
-            return ChatResponse(
-                text="I'm not sure I understand. Could you rephrase your question?",
-                intent="unknown",
-                confidence=int(intent_result['confidence'] * 100),
-                matched_qa_pair=None
-            )
-        
-        # If intent confidence is OK but no match found and no Q&A pairs
         return ChatResponse(
-            text="I don't have an answer for that question. Please contact support for more information.",
-            intent=intent_result['intent'],
-            confidence=int(intent_result['confidence'] * 100),
-            matched_qa_pair=None
+            text=result["answer"],
+            intent=result["intent"],
+            confidence=result["confidence"],
+            matched_qa_pair=None # Metadata can be added here if frontend needs it
         )
-        
-        
+
     except Exception as e:
         import traceback
         error_detail = f"{str(e)}\n{traceback.format_exc()}"
         print(f"Error in /chat endpoint: {error_detail}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/scrape", response_model=ScrapeResponse)
-async def scrape_website(request: ScrapeRequest):
-    """
-    Scrape a website with multi-page crawling support.
-    Returns full website content without character limits.
-    """
-    try:
-        # Validate URL
-        if not request.url or not request.url.strip():
-            raise HTTPException(status_code=400, detail="URL is required")
-        
-        # Normalize URL
-        url = request.url.strip()
-        if not url.startswith(('http://', 'https://')):
-            url = f"https://{url}"
-        
-        # Import scraper components
-        from scraper.async_website_scraper import AsyncScrapeOptions
-        from scraper.hybrid_scraper import HybridScraper, ScraperConfig
-        
-        # Create hybrid scraper config
-        hybrid_config = ScraperConfig(
-            min_content_length=200,  # Minimum chars to consider content sufficient
-            max_script_ratio=0.3,  # Max ratio of script tags
-            enable_playwright=True,  # Enable Playwright fallback
-            prefer_playwright=False,  # Don't force Playwright, use it as fallback
-            playwright_timeout=30000,  # 30 seconds
-            playwright_wait_until="networkidle"
-        )
-        
-        # Create hybrid scraper for single-page scraping
-        hybrid_scraper = HybridScraper(
-            config=hybrid_config,
-            timeout=30,  # HTTP timeout
-            user_agent="Chatbase-Clone-Scraper/1.0"
-        )
-        
-        # Scrape the main page with hybrid scraper
-        print(f"🔀 Starting hybrid scrape: {url}")
-        main_page = await hybrid_scraper.scrape(url)
-        
-        if not main_page:
-            raise HTTPException(status_code=500, detail="Failed to scrape website with all available scrapers")
-        
-        # For multi-page crawling, use AsyncWebsiteScraper but with hybrid scraper for each page
-        # For now, we'll use the existing AsyncWebsiteScraper for multi-page support
-        # TODO: Integrate HybridScraper into AsyncWebsiteScraper for per-page scraping
-        
-        # Create scrape options for multi-page crawling
-        options = AsyncScrapeOptions(
-            max_pages=request.max_pages or 100,
-            max_depth=request.max_depth or 5,
-            concurrency=5,
-            follow_external=request.follow_external or False,
-            respect_robots=request.respect_robots if request.respect_robots is not None else True,
-            delay=request.delay or 0.3
-        )
-        
-        # Initialize async scraper for multi-page crawling
-        scraper = AsyncWebsiteScraper(
-            base_url=url,
-            options=options,
-            storage_dir="content_storage"
-        )
-        
-        # Scrape website asynchronously (multi-page)
-        print(f"🌐 Starting multi-page crawl: {url}")
-        scraped_content = await scraper.run()
-        
-        # Replace first page with hybrid-scraped page if it's better
-        if scraped_content.pages and main_page:
-            if len(main_page.main_content) > len(scraped_content.pages[0].main_content):
-                scraped_content.pages[0] = main_page
-                print(f"✅ Replaced first page with hybrid-scraped content ({len(main_page.main_content)} chars)")
-        
-        # Cleanup hybrid scraper
-        await hybrid_scraper.close()
-        
-        # Combine all pages content - ensure we get actual content
-        all_content = "\n\n".join([
-            page.main_content for page in scraped_content.pages 
-            if page.main_content and len(page.main_content.strip()) > 0
-        ])
-        
-        # If all_content is still empty, try to get content from first page
-        if not all_content or len(all_content.strip()) == 0:
-            if scraped_content.pages:
-                first_page = scraped_content.pages[0]
-                if first_page.main_content:
-                    all_content = first_page.main_content
-                    print(f"⚠️  Using first page content only: {len(all_content)} chars")
-        all_headings = []
-        all_paragraphs = []
-        all_images = []
-        
-        for page in scraped_content.pages:
-            all_headings.extend(page.headings)
-            all_paragraphs.extend(page.paragraphs)
-            all_images.extend(page.images)
-        
-        # Log scraping results for debugging
-        print(f"📊 Scraping results:")
-        print(f"   - Total pages: {scraped_content.total_pages}")
-        print(f"   - Total characters: {len(all_content)}")
-        print(f"   - Total headings: {len(all_headings)}")
-        print(f"   - Total paragraphs: {len(all_paragraphs)}")
-        print(f"   - Total images: {len(all_images)}")
-        
-        # Log per-page stats
-        for i, page in enumerate(scraped_content.pages[:5], 1):  # Log first 5 pages
-            print(f"   - Page {i}: {page.url[:60]}... ({len(page.main_content)} chars, {len(page.links)} links)")
-        
-        if len(all_content) == 0:
-            print("⚠️  WARNING: No content extracted from any pages!")
-            # Try to get at least some content from first page
-            if scraped_content.pages:
-                first_page = scraped_content.pages[0]
-                if hasattr(first_page, 'main_content') and first_page.main_content:
-                    all_content = first_page.main_content
-                    print(f"   - Using first page content: {len(all_content)} chars")
-                else:
-                    print(f"   - First page also has no content!")
-        
-        # Get first page metadata (or combine from all pages)
-        first_page = scraped_content.pages[0] if scraped_content.pages else None
-        metadata = {
-            "description": first_page.meta_description if first_page else None,
-            "title": first_page.title if first_page else None
-        }
-        
-        # Prepare response
-        response_data = {
-            "title": first_page.title if first_page else "Scraped Website",
-            "content": all_content,  # Full content, no limits!
-            "url": scraped_content.base_url,
-            "headings": all_headings,
-            "paragraphs": all_paragraphs,
-            "images": all_images,
-            "metadata": metadata,
-            "stats": {
-                "totalPages": scraped_content.total_pages,
-                "totalCharacters": len(all_content),  # Use actual combined content length
-                "headingsCount": len(all_headings),
-                "paragraphsCount": len(all_paragraphs),
-                "imagesCount": len(all_images),
-                "errorsCount": len(scraped_content.errors)
-            },
-            "pages": [
-                {
-                    "url": page.url,
-                    "title": page.title,
-                    "content": page.main_content,  # Add actual content text (not just length)
-                    "contentLength": len(page.main_content),
-                    "headingsCount": len(page.headings),
-                    "paragraphsCount": len(page.paragraphs),
-                    "imagesCount": len(page.images),
-                    "linksCount": len(page.links),
-                    "depth": page.depth
-                }
-                for page in scraped_content.pages
-            ],
-            "errors": scraped_content.errors[:10]  # Include first 10 errors
-        }
-        
-        print(f"✅ Successfully scraped {scraped_content.total_pages} pages, {scraped_content.total_characters} characters")
-        
-        # Save content to storage if agent_id is provided
-        if request.agent_id:
-            content_storage.save_content(request.agent_id, response_data)
-            print(f"💾 Content saved for agent: {request.agent_id}")
-            
-            # Index content into vector store for fast retrieval
-            try:
-                # Convert ScrapedPage dataclass objects to dictionaries
-                pages_dict = []
-                for page in scraped_content.pages:
-                    pages_dict.append({
-                        'url': page.url,
-                        'title': page.title,
-                        'main_content': page.main_content,
-                        'headings': page.headings,
-                        'paragraphs': page.paragraphs,
-                        'images': page.images,
-                        'meta_description': page.meta_description,
-                        'depth': page.depth,
-                        'timestamp': page.timestamp
-                    })
-                
-                rag_agent = RAGAgent(agent_id=request.agent_id, llm_agent=llm_agent)
-                indexing_stats = rag_agent.index_content(pages_dict)
-                print(f"🔍 Indexed {indexing_stats['chunks_indexed']} chunks into vector store")
-                response_data['indexing_stats'] = indexing_stats
-            except Exception as e:
-                import traceback
-                print(f"⚠️  Error indexing content: {e}")
-                print(f"   Traceback: {traceback.format_exc()}")
-                # Continue even if indexing fails
-        
-        return ScrapeResponse(
-            success=True,
-            data=response_data
-        )
-        
-    except Exception as e:
-        import traceback
-        error_detail = f"{str(e)}\n{traceback.format_exc()}"
-        print(f"Error in /scrape endpoint: {error_detail}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 async def _chat_with_content_fallback(request: ContentChatRequest) -> ContentChatResponse:
     """
@@ -554,8 +244,43 @@ async def _chat_with_content_fallback(request: ContentChatRequest) -> ContentCha
                 sources=[]
             )
         
+        # Try to use LLM to provide a helpful response even without content
+        try:
+            # Build context from QA pairs if available for hybrid search
+            relevant_qa_context = ""
+            top_qa_pairs = []
+            if request.qa_pairs:
+                qa_dict = [qa.model_dump() if hasattr(qa, 'model_dump') else qa for qa in request.qa_pairs]
+                match_result = qa_matcher.find_match(request.message, qa_dict, intent="general", top_k=3)
+                if match_result and match_result.get('confidence', 0) > 0.4:
+                    top_qa_pairs = match_result.get('top_matches', [])
+                    relevant_qa_context = "Manual Q&A Info:\n" + "\n".join([f"Q: {q['question']}\nA: {q['answer']}" for q in top_qa_pairs])
+
+            # Use LLM to generate a response using the QA context if we have it
+            context = f"You are a helpful assistant. Provide a polite, friendly response. {relevant_qa_context}"
+            
+            llm_response = llm_agent.generate_answer(
+                user_query=request.message,
+                top_qa_pairs=top_qa_pairs,
+                context=context
+            )
+            
+            # If LLM gives a good response, use it
+            if llm_response and len(llm_response.strip()) > 20: 
+                # If we matched a Q&A pair, use a higher confidence
+                confidence = 85 if relevant_qa_context else 30
+                return ContentChatResponse(
+                    text=llm_response,
+                    intent="content_based" if relevant_qa_context else "general",
+                    confidence=confidence,
+                    sources=[{"title": "Knowledge Base", "url": "Manual Q&A", "relevance": 0.9}] if relevant_qa_context else []
+                )
+        except Exception as e:
+            print(f"⚠️  LLM fallback failed: {e}")
+        
+        # Final fallback: user-friendly message
         return ContentChatResponse(
-            text="I don't have any content stored for this agent. Please scrape a website first.",
+            text="I'm here to help! However, I don't have specific information about that topic yet. Could you please provide more details or try asking in a different way?",
             intent="no_content",
             confidence=0,
             sources=[]
@@ -565,8 +290,25 @@ async def _chat_with_content_fallback(request: ContentChatRequest) -> ContentCha
     content_chunks = content_storage.get_content_chunks(request.agent_id, chunk_size=1000)
     
     if not content_chunks:
+        # Try LLM fallback
+        try:
+            llm_response = llm_agent.generate_answer(
+                user_query=request.message,
+                top_qa_pairs=[],
+                context="You are a helpful assistant. The user is asking a question, but you don't have specific information about their query yet. Provide a polite, friendly response."
+            )
+            if llm_response and len(llm_response.strip()) > 20:
+                return ContentChatResponse(
+                    text=llm_response,
+                    intent="general",
+                    confidence=30,
+                    sources=[]
+                )
+        except Exception:
+            pass
+        
         return ContentChatResponse(
-            text="I couldn't find any content to answer your question.",
+            text="I'm here to help! However, I don't have specific information about that topic yet. Could you please rephrase your question or provide more context?",
             intent="no_content",
             confidence=0,
             sources=[]
@@ -580,8 +322,54 @@ async def _chat_with_content_fallback(request: ContentChatRequest) -> ContentCha
     )
     
     if not relevant_chunks or relevant_chunks[0].get("similarity_score", 0) < request.confidence_threshold:
+        # Try LLM fallback with available content + manual Q&A pairs
+        try:
+            # Also search manual Q&A pairs for hybrid fallback
+            relevant_qa_context = ""
+            top_qa_pairs = []
+            if request.qa_pairs:
+                qa_dict = [qa.model_dump() if hasattr(qa, 'model_dump') else qa for qa in request.qa_pairs]
+                match_result = qa_matcher.find_match(request.message, qa_dict, intent="general", top_k=3)
+                if match_result and match_result.get('confidence', 0) > 0.4:
+                    top_qa_pairs = match_result.get('top_matches', [])
+                    relevant_qa_context = "Manual Q&A Info:\n" + "\n".join([f"Q: {q['question']}\nA: {q['answer']}" for q in top_qa_pairs])
+
+            # Use all chunks as context even if similarity is low, plus Q&A pairs
+            context_text = "\n\n".join([
+                f"{chunk.get('text', '')[:300]}"
+                for chunk in content_chunks[:5]  # Use top 5 chunks
+            ])
+            
+            full_context = f"{context_text}\n\n{relevant_qa_context}"
+            
+            if full_context.strip():
+                llm_response = llm_agent.generate_answer_from_content(
+                    user_query=request.message,
+                    context=full_context
+                )
+                if llm_response and len(llm_response.strip()) > 20:
+                    # Determine which chunks to use for sources
+                    chunks_to_use = relevant_chunks[:3] if relevant_chunks else content_chunks[:1]
+                    sources = [{
+                        "url": chunk.get("url", ""),
+                        "title": chunk.get("title", ""),
+                        "relevance": chunk.get("similarity_score", 0) if chunk.get("similarity_score") else 0.3
+                    } for chunk in chunks_to_use]
+                    
+                    if relevant_qa_context:
+                        sources.append({"title": "Knowledge Base", "url": "Manual Q&A", "relevance": 0.8})
+
+                    return ContentChatResponse(
+                        text=llm_response,
+                        intent="content_based",
+                        confidence=85 if relevant_qa_context else 40,
+                        sources=sources
+                    )
+        except Exception as e:
+            print(f"⚠️  LLM fallback failed: {e}")
+        
         return ContentChatResponse(
-            text="I couldn't find relevant information in the stored content to answer your question.",
+            text="I couldn't find specific information about that in my knowledge base. Could you try rephrasing your question or asking about something else?",
             intent="no_match",
             confidence=0,
             sources=[]
@@ -636,129 +424,403 @@ async def _chat_with_content_fallback(request: ContentChatRequest) -> ContentCha
             }]
         )
 
+
 @app.post("/chat-content", response_model=ContentChatResponse)
 async def chat_with_content(request: ContentChatRequest):
-    """
-    RAG-based chat endpoint using vector store for fast semantic search.
-    Uses persisted embeddings for better performance.
-    """
     try:
-        # Validate request
         if not request.message or not request.message.strip():
             raise HTTPException(status_code=400, detail="Message cannot be empty")
-        
+
         if not request.agent_id:
             raise HTTPException(status_code=400, detail="Agent ID is required")
-        
-        # Check for greetings first (before initializing RAG agent)
+
         message_lower = request.message.lower().strip()
-        greetings = ['hey', 'hi', 'hello', 'good morning', 'good afternoon', 'good evening', 'greetings', 'howdy', 'sup', "what's up"]
-        casual_conversation = ['how are you', "how's it going", "what's going on", 'how do you do', 'nice to meet you', 'thanks', 'thank you', 'bye', 'goodbye', 'see you']
-        question_words = ['what', 'when', 'where', 'who', 'why', 'how', 'which', 'can', 'could', 'would', 'should', 'is', 'are', 'do', 'does', 'did']
-        
-        is_greeting = any(g == message_lower or message_lower.startswith(g + ' ') or message_lower.endswith(' ' + g) for g in greetings)
+        greetings = [
+            "hey", "hi", "hello", "good morning", "good afternoon", "good evening",
+            "greetings", "howdy", "sup", "what's up",
+        ]
+        casual_conversation = [
+            "how are you", "how's it going", "what's going on", "how do you do",
+            "nice to meet you", "thanks", "thank you", "bye", "goodbye", "see you",
+        ]
+        question_words = [
+            "what", "when", "where", "who", "why", "how", "which", "can", "could",
+            "would", "should", "is", "are", "do", "does", "did",
+        ]
+
+        is_greeting = any(
+            g == message_lower or message_lower.startswith(g + " ") or message_lower.endswith(" " + g)
+            for g in greetings
+        )
         is_casual = any(c in message_lower for c in casual_conversation)
-        has_question = any(' ' + q + ' ' in message_lower or message_lower.startswith(q + ' ') or message_lower.endswith(' ' + q) for q in question_words)
-        
-        # If it's a pure greeting, try to get company-specific response
+        has_question = any(
+            " " + q + " " in message_lower or message_lower.startswith(q + " ") or message_lower.endswith(" " + q)
+            for q in question_words
+        )
+
+        # Simplified greeting response (no company extractor)
         if (is_greeting or is_casual) and not has_question:
-            # Load content to extract company metadata
-            content_data = content_storage.load_content(request.agent_id)
-            if content_data:
-                company_metadata = extract_company_metadata(content_data)
-                greeting_text = generate_company_greeting(company_metadata)
-            else:
-                # Fallback to generic greeting
-                greeting_text = "Hi! How can I help you today? 😊"
-            
+            greeting_text = "Hi! How can I help you today? 😊"
             return ContentChatResponse(
                 text=greeting_text,
-                intent='greeting' if is_greeting else 'casual',
+                intent="greeting" if is_greeting else "casual",
                 confidence=95 if is_greeting else 90,
-                sources=[]
+                sources=[],
             )
+
+        # Prepare QA pairs as list of dicts for RAG agent
+        qa_pairs_dict = []
+        if request.qa_pairs:
+            qa_pairs_dict = [qa.model_dump() for qa in request.qa_pairs]
+
+        # Get company info from stored content if possible
+        content_data = content_storage.load_content(request.agent_id)
+        base_url = content_data.get("base_url", "") if content_data else ""
+        base_company_info = f"This is an AI support assistant for {base_url}" if base_url else "This is an AI support assistant."
         
-        # Initialize RAG agent (loads vector store if exists)
-        rag_agent = RAGAgent(agent_id=request.agent_id, llm_agent=llm_agent)
-        
-        # Check if vector store has content
+        # Use registry to avoid memory leaks from re-initializing models
+        rag_agent = get_rag_agent(request.agent_id, base_company_info)
         stats = rag_agent.get_stats()
-        if not stats['vector_store']['index_exists']:
-            # Try to load content from JSON storage first
+        if not stats["vector_store"]["index_exists"]:
             content_data = content_storage.load_content(request.agent_id)
             if content_data:
-                # Content exists but not indexed - try to index it now
                 try:
-                    print(f"⚠️  Vector store not found, but content exists. Attempting to index...")
-                    pages = content_data.get('pages', [])
+                    print("⚠️  Vector store not found, but content exists. Attempting to index...")
+                    pages = content_data.get("pages", [])
                     if pages:
-                        # Convert pages to dict format if needed
                         pages_dict = []
                         for page in pages:
                             if isinstance(page, dict):
                                 pages_dict.append(page)
                             else:
-                                # Convert ScrapedPage dataclass to dict
                                 pages_dict.append({
-                                    'url': getattr(page, 'url', ''),
-                                    'title': getattr(page, 'title', ''),
-                                    'main_content': getattr(page, 'main_content', '') or content_data.get('full_content', ''),
-                                    'headings': getattr(page, 'headings', []),
-                                    'paragraphs': getattr(page, 'paragraphs', []),
-                                    'images': getattr(page, 'images', []),
-                                    'meta_description': getattr(page, 'meta_description', ''),
+                                    "url": getattr(page, "url", ""),
+                                    "title": getattr(page, "title", ""),
+                                    "main_content": getattr(page, "main_content", "") or content_data.get("full_content", ""),
+                                    "headings": getattr(page, "headings", []),
+                                    "paragraphs": getattr(page, "paragraphs", []),
+                                    "images": getattr(page, "images", []),
+                                    "meta_description": getattr(page, "meta_description", ""),
                                 })
-                        
                         if pages_dict:
                             indexing_stats = rag_agent.index_content(pages_dict)
                             print(f"✅ Indexed {indexing_stats['chunks_indexed']} chunks into vector store")
-                            # Now retry the query
                             result = rag_agent.answer(
                                 query=request.message,
-                                top_k=5,
-                                min_similarity=0.2,
-                                confidence_threshold=request.confidence_threshold,
-                                max_context_length=2000
+                                max_context_length=2000,
+                                qa_pairs=qa_pairs_dict,
+                                history=request.history
                             )
                             return ContentChatResponse(
-                                text=result['answer'],
-                                intent=result['intent'],
-                                confidence=result['confidence'],
-                                sources=result['sources']
+                                text=result["answer"],
+                                intent=result["intent"],
+                                confidence=result["confidence"],
+                                sources=result["sources"],
                             )
                 except Exception as e:
                     print(f"⚠️  Error indexing existing content: {e}")
                     import traceback
                     print(traceback.format_exc())
-            
-            # Fallback to old method if vector store doesn't exist
+
             return await _chat_with_content_fallback(request)
-        
-        # Use RAG agent for answer generation
+
         result = rag_agent.answer(
             query=request.message,
-            top_k=5,
-            min_similarity=0.2,
-            confidence_threshold=request.confidence_threshold,
-            max_context_length=2000
+            max_context_length=2000,
+            qa_pairs=qa_pairs_dict,
+            history=request.history
         )
-        
+
         return ContentChatResponse(
-            text=result['answer'],
-            intent=result['intent'],
-            confidence=result['confidence'],
-            sources=result['sources']
+            text=result["answer"],
+            intent=result["intent"],
+            confidence=result["confidence"],
+            sources=result["sources"],
         )
-        
+
     except Exception as e:
         import traceback
         error_detail = f"{str(e)}\n{traceback.format_exc()}"
         print(f"Error in /chat-content endpoint: {error_detail}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+class RenameRequest(BaseModel):
+    old_agent_id: str
+    new_agent_id: str
+
+@app.post("/rename-agent")
+async def rename_agent(request: RenameRequest):
+    """
+    Rename an agent's content and vector store.
+    Used when converting a temporary agent (from scraping) to a permanent one.
+    """
+    try:
+        # Update registry if it exists
+        if request.old_agent_id in rag_agent_registry:
+            agent = rag_agent_registry.pop(request.old_agent_id)
+            agent.agent_id = request.new_agent_id
+            rag_agent_registry[request.new_agent_id] = agent
+        
+        # 1. Rename content storage
+        content_renamed = content_storage.rename_agent(request.old_agent_id, request.new_agent_id)
+        
+        # 2. Rename vector store
+        # Note: We create a temporary agent just for renaming if it's not in registry
+        # but RAGAgent init loads models, so we check registry first
+        if request.new_agent_id in rag_agent_registry:
+            vector_renamed = rag_agent_registry[request.new_agent_id].rename_agent(request.new_agent_id)
+        else:
+            # We use get_rag_agent to ensure models are loaded efficiently
+            temp_agent = get_rag_agent(request.old_agent_id)
+            vector_renamed = temp_agent.rename_agent(request.new_agent_id)
+        
+        if vector_renamed:
+            print(f"✅ Successfully renamed agent files and vector store for {request.new_agent_id}")
+        
+        return {
+            "success": True,
+            "message": f"Agent {request.old_agent_id} renamed to {request.new_agent_id}",
+            "content_renamed": content_renamed,
+            "vector_renamed": vector_renamed
+        }
+
+    except Exception as e:
+        import traceback
+        error_detail = f"{str(e)}\n{traceback.format_exc()}"
+        print(f"Error in /rename-agent endpoint: {error_detail}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@app.post("/scrape", response_model=ScrapeResponse)
+async def scrape(request: ScrapeRequest):
+    """
+    Scrape a website using AsyncWebsiteScraper.
+    Supports multi-page crawling with configurable limits.
+    """
+    try:
+        if not request.url or not request.url.strip():
+            raise HTTPException(status_code=400, detail="URL is required")
+        
+        # Normalize URL
+        url = request.url.strip()
+        if not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
+        
+        # Create scrape options
+        scrape_options = AsyncScrapeOptions(
+            max_pages=request.max_pages or 100,
+            max_depth=request.max_depth or 5,
+            follow_external=request.follow_external or False,
+            respect_robots=request.respect_robots if request.respect_robots is not None else True,
+            delay=request.delay or 0.5,
+        )
+        
+        # Initialize scraper
+        scraper = AsyncWebsiteScraper(base_url=url, options=scrape_options)
+        
+        # Run scraping
+        print(f"🌐 Starting scrape for: {url}")
+        scraped_content = await scraper.run()
+        
+        # Check if scraping failed or extracted no content
+        combined_content = ""
+        all_headings = []
+        
+        if scraped_content and scraped_content.pages:
+            # Combine all page content
+            all_content = []
+            
+            for page in scraped_content.pages:
+                if page.main_content:
+                    all_content.append(page.main_content)
+                
+                # Collect headings
+                for heading in page.headings:
+                    if isinstance(heading, dict) and heading.get("text"):
+                        all_headings.append({
+                            "level": heading.get("level", "h1"),
+                            "text": heading.get("text", ""),
+                            "id": heading.get("id", "")
+                        })
+            
+            combined_content = "\n\n".join(all_content)
+            
+            # Fallback: if no content extracted, try to get from first page
+            if not combined_content.strip():
+                first_page = scraped_content.pages[0]
+                combined_content = first_page.main_content or ""
+        
+        # If content extracted is very low or BeautifulSoup failed, try Playwright fallback
+        if not combined_content.strip() or len(combined_content.strip()) < 1000 or (scraped_content and scraped_content.total_characters < 1000):
+            print(f"⚠️  BeautifulSoup extracted low content ({len(combined_content)} chars). Trying Playwright fallback...")
+            try:
+                from scraper.playwright_scraper import PlaywrightScraper
+                playwright_scraper = PlaywrightScraper(timeout=90, page_timeout=90000, wait_until="domcontentloaded")
+                
+                if playwright_scraper.is_available():
+                    print(f"🎭 Using Playwright to scrape: {url}")
+                    playwright_page = await playwright_scraper.scrape(url)
+                    
+                    if playwright_page and playwright_page.main_content:
+                        print(f"✅ Playwright extracted {len(playwright_page.main_content)} characters")
+                        
+                        # Use Playwright content
+                        combined_content = playwright_page.main_content
+                        
+                        # Update headings
+                        for heading in playwright_page.headings:
+                            if isinstance(heading, dict) and heading.get("text"):
+                                all_headings.append({
+                                    "level": heading.get("level", "h1"),
+                                    "text": heading.get("text", ""),
+                                    "id": heading.get("id", "")
+                                })
+                        
+                        # Create a ScrapedContent-like object with Playwright results
+                        if not scraped_content or not scraped_content.pages:
+                            from scraper.async_website_scraper import ScrapedContent
+                            scraped_content = ScrapedContent(
+                                base_url=url,
+                                pages=[playwright_page],
+                                total_pages=1,
+                                total_characters=len(combined_content),
+                                timestamp=datetime.now().isoformat(),
+                                errors=[]
+                            )
+                        else:
+                            # Replace first page with Playwright content
+                            scraped_content.pages[0] = playwright_page
+                            scraped_content.total_characters = len(combined_content)
+                        
+                        await playwright_scraper.close()
+                    else:
+                        print(f"⚠️  Playwright also failed to extract content")
+                else:
+                    print(f"⚠️  Playwright is not available. Install with: pip install playwright && playwright install")
+            except Exception as e:
+                print(f"⚠️  Playwright fallback failed: {e}")
+                import traceback
+                print(traceback.format_exc())
+        
+        if not scraped_content or not scraped_content.pages:
+            raise HTTPException(
+                status_code=500,
+                detail="Scraping failed: No pages were scraped. The website may require JavaScript rendering (React/Next.js). Install Playwright for JS-heavy sites: pip install playwright && playwright install"
+            )
+        
+        # Prepare response data
+        response_data = {
+            "url": url,
+            "title": scraped_content.pages[0].title if scraped_content.pages else "Scraped Website",
+            "content": combined_content,
+            "headings": all_headings,
+            "pages": [
+                {
+                    "url": page.url,
+                    "title": page.title,
+                    "content": page.main_content,  # Include content in each page
+                    "headings": page.headings,
+                    "paragraphs": page.paragraphs,
+                    "images": page.images,
+                    "meta_description": page.meta_description,
+                    "depth": page.depth,
+                }
+                for page in scraped_content.pages
+            ],
+            "metadata": {
+                "total_pages": scraped_content.total_pages,
+                "total_characters": len(combined_content),
+                "scraped_at": scraped_content.timestamp,
+                "errors": scraped_content.errors,
+            },
+            "stats": {
+                "total_pages": scraped_content.total_pages,
+                "total_characters": len(combined_content),
+                "pages_scraped": len(scraped_content.pages),
+                "errors_count": len(scraped_content.errors),
+            }
+        }
+        
+        # Save content if agent_id is provided
+        if request.agent_id:
+            try:
+                content_storage.save_content(request.agent_id, response_data)
+                print(f"💾 Saved content for agent: {request.agent_id}")
+                
+                # Automatically index content into RAG vector store
+                if combined_content and len(combined_content.strip()) > 100:
+                    try:
+                        # Validate content is readable text (not binary/garbled)
+                        def is_readable_text(text: str) -> bool:
+                            """Check if text is readable (not binary/garbled)"""
+                            if not text or len(text.strip()) < 50:
+                                return False
+                            # Check if text contains mostly printable ASCII/Unicode characters
+                            printable_ratio = sum(1 for c in text[:1000] if c.isprintable() or c.isspace()) / min(len(text), 1000)
+                            # Check for excessive non-ASCII characters that might indicate binary data
+                            non_ascii_ratio = sum(1 for c in text[:1000] if ord(c) > 127) / min(len(text), 1000)
+                            # Text should be mostly printable and not too many high-unicode chars
+                            return printable_ratio > 0.7 and non_ascii_ratio < 0.5
+                        
+                        print(f"🔄 Indexing scraped content into RAG vector store...")
+                        rag_agent = RAGAgent(agent_id=request.agent_id, llm_agent=llm_agent)
+                        
+                        # Prepare pages for indexing (filter out garbled content)
+                        pages_for_indexing = []
+                        for page in scraped_content.pages:
+                            page_content = page.main_content or ""
+                            
+                            # Validate content is readable
+                            if page_content and len(page_content.strip()) > 50:
+                                if is_readable_text(page_content):
+                                    pages_for_indexing.append({
+                                        "url": page.url,
+                                        "title": page.title or "Untitled",
+                                        "main_content": page_content,
+                                        "headings": page.headings,
+                                        "paragraphs": page.paragraphs,
+                                        "images": page.images,
+                                        "meta_description": page.meta_description,
+                                    })
+                                else:
+                                    print(f"⚠️  Skipping page {page.url}: content appears to be binary/garbled")
+                        
+                        # If we have valid pages, index them
+                        if pages_for_indexing:
+                            indexing_stats = rag_agent.index_content(pages_for_indexing)
+                            print(f"✅ RAG indexing complete: {indexing_stats['chunks_indexed']} chunks indexed from {indexing_stats['pages_indexed']} pages")
+                        else:
+                            print(f"⚠️  No valid pages to index (all content too short, empty, or garbled)")
+                            print(f"   Content preview: {combined_content[:200] if combined_content else 'None'}")
+                    except Exception as e:
+                        print(f"⚠️  Warning: Failed to index content into RAG: {e}")
+                        import traceback
+                        print(traceback.format_exc())
+            except Exception as e:
+                print(f"⚠️  Warning: Failed to save content: {e}")
+        
+        print(f"✅ Scraping completed: {scraped_content.total_pages} pages, {len(combined_content)} characters")
+        
+        return ScrapeResponse(
+            success=True,
+            data=response_data
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_detail = f"{str(e)}\n{traceback.format_exc()}"
+        print(f"❌ Error in /scrape endpoint: {error_detail}")
+        raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -67,6 +67,12 @@ __pycache__/
 # Content storage (JSON files saved by backend)
 crewai-service/content_storage/
 crewai-service/content_storage/*
+!crewai-service/content_storage/.gitkeep
+
+# Vector storage (FAISS indexes and metadata)
+crewai-service/vector_storage/
+crewai-service/vector_storage/*
+!crewai-service/vector_storage/.gitkeep
 
 # Uvicorn logs (if any)
 *.log
@@ -88,3 +94,38 @@ prisma/client/
 
 # Optional: Prisma migrations (if you want to ignore migrations folder, but usually you commit it)
 # prisma/migrations/
+
+# Playwright browsers and cache
+crewai-service/.playwright/
+playwright/.ms-playwright/
+
+# Python testing and debugging
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# Jupyter Notebook checkpoints (if any)
+.ipynb_checkpoints/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Assets folder (auto-generated images from Cursor)
+assets/
+
+# Model weights (if any large files)
+*.bin
+*.pt
+*.pth
+*.onnx
+
+# Database files (if any local DB)
+*.db-journal
+*.db-wal
+
+# Cursor project specific
+.cursor/

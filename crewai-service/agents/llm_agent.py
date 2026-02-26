@@ -4,43 +4,115 @@ import os
 
 class LLMAgent:
     """
-    Uses a local LLM (Ollama) to generate or refine answers when semantic search confidence is low.
+    Uses an LLM (local Ollama or cloud providers like xAI/Groq) to generate or refine answers.
     """
     
-    def __init__(self, model_name: str = "phi3:mini", ollama_url: str = "http://localhost:11434"):
+    def __init__(
+        self, 
+        model_name: str = "llama3", 
+        provider: str = "ollama",
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None
+    ):
         """
         Initialize the LLM agent.
         
         Args:
-            model_name: Name of the Ollama model to use (default: phi3:mini - 3.8B, ~2GB)
-            ollama_url: URL of the Ollama server (default: http://localhost:11434)
+            model_name: Name of the model to use
+            provider: 'ollama', 'xai', or 'groq'
+            api_key: API key for cloud providers
+            base_url: Base URL for the API (if different from default)
         """
+        self.provider = provider.lower()
         self.model_name = model_name
-        self.ollama_url = ollama_url
-        self.available = self._check_ollama_available()
+        self.api_key = api_key
+        
+        if self.provider == "ollama":
+            self.base_url = base_url or os.getenv("OLLAMA_URL", "http://localhost:11434")
+            self.chat_url = f"{self.base_url}/api/chat"
+        elif self.provider == "xai":
+            self.base_url = base_url or "https://api.x.ai/v1"
+            self.chat_url = f"{self.base_url}/chat/completions"
+        elif self.provider == "groq":
+            self.base_url = base_url or "https://api.groq.com/openai/v1"
+            self.chat_url = f"{self.base_url}/chat/completions"
+        else:
+            raise ValueError(f"Unsupported LLM provider: {self.provider}")
+            
+        self.available = self._check_provider_available()
     
-    def _check_ollama_available(self) -> bool:
-        """Check if Ollama is running and the model is available."""
-        try:
-            # Check if Ollama is running
-            response = requests.get(f"{self.ollama_url}/api/tags", timeout=2)
-            if response.status_code == 200:
-                models = response.json().get('models', [])
-                model_names = [model.get('name', '') for model in models]
-                if any(self.model_name in name for name in model_names):
-                    print(f"✅ Ollama is available with model: {self.model_name}")
-                    return True
-                else:
-                    print(f"⚠️  Ollama is running but model '{self.model_name}' not found.")
-                    print(f"   Available models: {[m.get('name') for m in models]}")
-                    print(f"   Run: ollama pull {self.model_name}")
-                    return False
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️  Ollama not available at {self.ollama_url}: {e}")
-            print(f"   Install Ollama from https://ollama.ai and run: ollama pull {self.model_name}")
-            return False
+    def _check_provider_available(self) -> bool:
+        """Check if the selected provider and model are available."""
+        if self.provider == "ollama":
+            try:
+                response = requests.get(f"{self.base_url}/api/tags", timeout=2)
+                if response.status_code == 200:
+                    models = response.json().get('models', [])
+                    model_names = [model.get('name', '') for model in models]
+                    if any(self.model_name in name for name in model_names):
+                        print(f"[OK] Ollama is available with model: {self.model_name}")
+                        return True
+                    else:
+                        print(f"[WARN] Ollama is running but model '{self.model_name}' not found.")
+                        return False
+            except Exception:
+                return False
+        elif self.provider in ["xai", "groq"]:
+            if not self.api_key:
+                print(f"[WARN] {self.provider.upper()} API key missing. Set appropriate key in .env")
+                return False
+            print(f"[INFO] Using Cloud LLM ({self.provider.upper()}) with model: {self.model_name}")
+            return True
         return False
     
+    def _call_llm(self, messages: List[Dict], options: Dict = None) -> Optional[str]:
+        """Generic method to call the LLM API based on provider."""
+        if not self.available:
+            return None
+            
+        try:
+            headers = {}
+            if self.provider in ["xai", "groq"]:
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                }
+            
+            payload = {
+                "model": self.model_name,
+                "messages": messages,
+                "stream": False
+            }
+            
+            # Map options to provider-specific formats
+            if options:
+                if self.provider == "ollama":
+                    payload["options"] = options
+                elif self.provider in ["xai", "groq"]:
+                    # OpenAI style uses flat options
+                    payload.update(options)
+            
+            response = requests.post(
+                self.chat_url,
+                json=payload,
+                headers=headers,
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if self.provider == "ollama":
+                    return result.get('message', {}).get('content', '').strip()
+                elif self.provider in ["xai", "groq"]:
+                    return result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+            else:
+                print(f"Error calling {self.provider} ({response.status_code}): {response.text}")
+                return None
+                
+        except Exception as e:
+            print(f"Exception during LLM call to {self.provider}: {e}")
+            return None
+
     def generate_answer(
         self, 
         user_query: str, 
@@ -49,103 +121,41 @@ class LLMAgent:
     ) -> str:
         """
         Generate an answer using the LLM when semantic search confidence is low.
-        
-        Args:
-            user_query: The user's question
-            top_qa_pairs: Top 3-5 similar Q&A pairs from semantic search (even if low confidence)
-            context: Additional context (optional)
-        
-        Returns:
-            Generated answer string
         """
-        if not self.available:
-            # Fallback to best Q&A pair if LLM is not available
-            if top_qa_pairs:
-                return top_qa_pairs[0].get('answer', "I'm not sure how to answer that. Could you provide more details?")
-            return "I'm not sure how to answer that. Could you provide more details?"
+        # Build context string from top Q&A pairs
+        qa_context = ""
+        if top_qa_pairs:
+            qa_context = "Relevant Q&A pairs from knowledge base:\n"
+            for i, qa in enumerate(top_qa_pairs[:5], 1):
+                qa_context += f"{i}. Q: {qa.get('question', '')}\n   A: {qa.get('answer', '')}\n"
+
+        # Build additional context string
+        context_str = f"\nAdditional Context:\n{context}\n" if context else ""
+
+        # System message for rules
+        system_rules = f"You are a helpful chat assistant. Answer the user's question using ONLY the information provided.\n\n{qa_context}{context_str}\n\n"
+        system_rules += "🚫 CRITICAL RULES:\n1. Answer ONLY using the information provided above.\n2. If the answer is not in the provided information, say: \"I don't have information about that. Could you ask about something else?\"\n3. NEVER use your general knowledge to \"expand\" on details.\n4. NEVER make up company names, products, or features.\n5. Provide a direct answer. Avoid introductory phrases or conversational filler."
+
+        messages = [
+            {"role": "system", "content": system_rules},
+            {"role": "user", "content": user_query}
+        ]
+
+        answer = self._call_llm(messages, options={"temperature": 0.3, "max_tokens": 150})
         
-        try:
-            # Build context from top Q&A pairs
-            qa_context = ""
-            if top_qa_pairs:
-                qa_context = "\n\nRelevant Q&A pairs from knowledge base:\n"
-                for i, qa in enumerate(top_qa_pairs[:5], 1):  # Top 5 pairs
-                    qa_context += f"{i}. Q: {qa.get('question', '')}\n   A: {qa.get('answer', '')}\n"
+        if answer:
+            # Clean up prefixes
+            prefixes_to_remove = ["Answer:", "Based on the Q&A pairs:", "According to the knowledge base:"]
+            for prefix in prefixes_to_remove:
+                if answer.startswith(prefix):
+                    answer = answer[len(prefix):].strip()
+            return answer
             
-            # Build the prompt
-            prompt = f"""Answer the user's question briefly and accurately using the Q&A pairs below.
+        # Fallback
+        if top_qa_pairs:
+            return top_qa_pairs[0].get('answer', "I'm not sure how to answer that.")
+        return "I'm not sure how to answer that. Could you provide more details?"
 
-{qa_context}
-
-User Question: {user_query}
-
-Instructions:
-- Answer in 1-2 short sentences maximum
-- Use only information from the Q&A pairs
-- Be direct and to the point
-- No explanations or extra details
-
-Answer:"""
-
-            # Call Ollama API
-            response = requests.post(
-                f"{self.ollama_url}/api/generate",
-                json={
-                    "model": self.model_name,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.5,  # Lower temperature for more focused answers
-                        "top_p": 0.9,
-                        "max_tokens": 150,  # Shorter responses
-                    }
-                },
-                timeout=30  # 30 second timeout
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                answer = result.get('response', '').strip()
-                
-                # Clean up the answer (remove any prompt artifacts)
-                if answer:
-                    # Remove common prefixes that models sometimes add
-                    prefixes_to_remove = [
-                        "Answer:",
-                        "Based on the Q&A pairs:",
-                        "According to the knowledge base:",
-                    ]
-                    for prefix in prefixes_to_remove:
-                        if answer.startswith(prefix):
-                            answer = answer[len(prefix):].strip()
-                    
-                    return answer
-                else:
-                    # Fallback if LLM returns empty
-                    if top_qa_pairs:
-                        return top_qa_pairs[0].get('answer', "I'm not sure how to answer that.")
-                    return "I'm not sure how to answer that. Could you provide more details?"
-            else:
-                print(f"Error calling Ollama: {response.status_code} - {response.text}")
-                # Fallback to best Q&A pair
-                if top_qa_pairs:
-                    return top_qa_pairs[0].get('answer', "I'm not sure how to answer that.")
-                return "I'm not sure how to answer that. Could you provide more details?"
-                
-        except requests.exceptions.Timeout:
-            print("⚠️  Ollama request timed out. Using fallback answer.")
-            if top_qa_pairs:
-                return top_qa_pairs[0].get('answer', "I'm not sure how to answer that.")
-            return "I'm not sure how to answer that. Could you provide more details?"
-        except Exception as e:
-            print(f"Error in LLM generation: {e}")
-            import traceback
-            print(traceback.format_exc())
-            # Fallback to best Q&A pair
-            if top_qa_pairs:
-                return top_qa_pairs[0].get('answer', "I'm not sure how to answer that.")
-            return "I'm not sure how to answer that. Could you provide more details."
-    
     def refine_answer(
         self, 
         user_query: str, 
@@ -154,67 +164,23 @@ Answer:"""
     ) -> str:
         """
         Refine an existing answer using LLM when confidence is medium (70-85%).
-        
-        Args:
-            user_query: The user's question
-            matched_answer: The answer from semantic search
-            confidence: Confidence score from semantic search
-        
-        Returns:
-            Refined answer string
         """
-        if not self.available:
-            return matched_answer  # Return original if LLM not available
+        messages = [
+            {"role": "system", "content": "You're a friendly chat assistant. Make the provided answer more natural and conversational. 🚫 CRITICAL: Keep the SAME information - don't add anything new. Just 1-2 sentences."},
+            {"role": "user", "content": f"User asked: \"{user_query}\"\n\nCurrent answer:\n{matched_answer}"}
+        ]
+
+        refined = self._call_llm(messages, options={"temperature": 0.4, "max_tokens": 100})
         
-        try:
-            prompt = f"""Make this answer shorter and more direct.
-
-User Question: {user_query}
-
-Current Answer:
-{matched_answer}
-
-Instructions:
-- Keep it to 1-2 short sentences
-- Remove unnecessary words
-- Be direct and to the point
-
-Refined Answer:"""
-
-            response = requests.post(
-                f"{self.ollama_url}/api/generate",
-                json={
-                    "model": self.model_name,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.4,  # Lower temperature for concise refinement
-                        "top_p": 0.9,
-                        "max_tokens": 100,  # Shorter refined responses
-                    }
-                },
-                timeout=20
-            )
+        if refined:
+            prefixes_to_remove = ["Refined Answer:", "Answer:"]
+            for prefix in prefixes_to_remove:
+                if refined.startswith(prefix):
+                    refined = refined[len(prefix):].strip()
+            return refined
             
-            if response.status_code == 200:
-                result = response.json()
-                refined = result.get('response', '').strip()
-                
-                if refined:
-                    # Remove prompt artifacts
-                    prefixes_to_remove = ["Refined Answer:", "Answer:"]
-                    for prefix in prefixes_to_remove:
-                        if refined.startswith(prefix):
-                            refined = refined[len(prefix):].strip()
-                    return refined
-            
-            # Fallback to original answer
-            return matched_answer
-            
-        except Exception as e:
-            print(f"Error in LLM refinement: {e}")
-            return matched_answer  # Return original answer on error
-    
+        return matched_answer
+
     def generate_answer_from_content(
         self,
         user_query: str,
@@ -222,78 +188,35 @@ Refined Answer:"""
     ) -> str:
         """
         Generate an answer from scraped website content (RAG approach).
-        
-        Args:
-            user_query: The user's question
-            context: Relevant content chunks from the website OR full prompt
-        
-        Returns:
-            Generated answer string
         """
-        if not self.available:
-            # Fallback: return first part of context
-            return context.split('\n')[0][:200] + "..."
+        # Strip system tags if they were manually injected by the caller
+        clean_context = context
+        if "<|begin_of_text|>" in context:
+            if "<|start_header_id|>user<|end_header_id|>" in context:
+                clean_context = context.split("<|start_header_id|>user<|end_header_id|>")[-1]
+                clean_context = clean_context.split("<|eot_id|>")[0].strip()
+
+        system_msg = (
+            "You are a professional assistant. Answer the user's question using the provided context and global knowledge.\n\n"
+            "🚫 CRITICAL INSTRUCTION:\n"
+            "1. If content is marked with [AUTHORITATIVE KNOWLEDGE] or [GLOBAL KNOWLEDGE], it is the TRUTH. Use it to answer identity questions.\n"
+            "2. Answer in 1–3 clear sentences. Keep it direct and professional.\n"
+            "3. If the answer is not in the context or global knowledge, say: 'I don't have information about that in my knowledge base.'\n"
+            "4. Avoid using external knowledge not related to the company's identity."
+        )
+
+        messages = [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": f"CONTEXT:\n{clean_context}\n\nQUESTION: {user_query}\n\nGive a brief, direct answer (1–3 sentences):"}
+        ]
+
+        answer = self._call_llm(messages, options={"temperature": 0.2, "max_tokens": 200})
         
-        try:
-            # Check if context is already a full prompt (contains "CRITICAL RULES" or "CONTEXT FROM WEBSITE")
-            # If so, use it directly; otherwise, build prompt
-            if "CRITICAL RULES" in context or "CONTEXT FROM WEBSITE" in context:
-                # Already a full prompt, use directly
-                prompt = context
-            else:
-                # Build prompt from context
-                prompt = f"""Answer the user's question using ONLY the information provided in the context below.
-If the context doesn't contain enough information to answer, say so.
-
-Context from website:
-{context}
-
-User Question: {user_query}
-
-Instructions:
-- Answer based ONLY on the context provided
-- Be concise (2-3 sentences maximum)
-- If you can't answer from the context, say "I don't have enough information to answer that question."
-- Be direct and helpful
-
-Answer:"""
-
-            response = requests.post(
-                f"{self.ollama_url}/api/generate",
-                json={
-                    "model": self.model_name,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.7,
-                        "top_p": 0.9,
-                        "max_tokens": 200,
-                    }
-                },
-                timeout=30
-            )
+        if answer:
+            prefixes_to_remove = ["Answer:", "Based on the context:", "According to the website:", "ANSWER (based ONLY on context above):", "ANSWER:"]
+            for prefix in prefixes_to_remove:
+                if answer.startswith(prefix):
+                    answer = answer[len(prefix):].strip()
+            return answer
             
-            if response.status_code == 200:
-                result = response.json()
-                answer = result.get('response', '').strip()
-                
-                # Clean up the answer
-                if answer:
-                    prefixes_to_remove = [
-                        "Answer:", "Based on the context:", "According to the website:",
-                        "ANSWER (based ONLY on context above):", "ANSWER:"
-                    ]
-                    for prefix in prefixes_to_remove:
-                        if answer.startswith(prefix):
-                            answer = answer[len(prefix):].strip()
-                    return answer
-                else:
-                    return context.split('\n')[0][:200] + "..."
-            else:
-                print(f"Error calling Ollama: {response.status_code}")
-                return context.split('\n')[0][:200] + "..."
-                
-        except Exception as e:
-            print(f"Error in LLM content generation: {e}")
-            # Fallback: return relevant context
-            return context.split('\n')[0][:200] + "..."
+        return None

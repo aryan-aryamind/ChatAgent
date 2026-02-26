@@ -30,6 +30,8 @@ export interface AgentCreationState {
   selectedModel: string | null
   responseMode: 'llm' | 'crewai'
   totalSize: string
+  tempAgentId?: string | null // Store temporary ID from scraping
+  agentId?: string | null // Store the permanent agent ID
 }
 
 interface AgentCreationContextType {
@@ -43,6 +45,8 @@ interface AgentCreationContextType {
   setResponseMode: (mode: 'llm' | 'crewai') => void
   updateSourceStatus: (sourceId: string, status: Source['status']) => void
   updateSourceQAPairs: (sourceId: string, qaPairs: QAPair[]) => void
+  setTempAgentId: (id: string) => void
+  setAgentId: (id: string) => void
   reset: () => void
 }
 
@@ -53,6 +57,8 @@ const initialState: AgentCreationState = {
   selectedModel: null,
   responseMode: 'llm',
   totalSize: '0 KB',
+  tempAgentId: null,
+  agentId: null,
 }
 
 const AgentCreationContext = createContext<AgentCreationContextType | undefined>(undefined)
@@ -130,6 +136,14 @@ export function AgentCreationProvider({ children }: { children: ReactNode }) {
     }))
   }
 
+  const setTempAgentId = (id: string) => {
+    setState((prev) => ({ ...prev, tempAgentId: id }))
+  }
+
+  const setAgentId = (id: string) => {
+    setState((prev) => ({ ...prev, agentId: id }))
+  }
+
   const reset = () => {
     setState(initialState)
   }
@@ -147,6 +161,8 @@ export function AgentCreationProvider({ children }: { children: ReactNode }) {
         setResponseMode,
         updateSourceStatus,
         updateSourceQAPairs,
+        setTempAgentId,
+        setAgentId,
         reset,
       }}
     >

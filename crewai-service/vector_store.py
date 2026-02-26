@@ -21,11 +21,14 @@ class VectorStore:
     Persists embeddings to disk for fast retrieval.
     """
     
+    # Static cache for models to avoid reloading on every request (Memory leak fix)
+    _model_cache = {}
     def __init__(
         self,
         agent_id: str,
         storage_dir: str = "vector_storage",
-        model_name: str = "all-MiniLM-L6-v2"
+        model_name: str = "BAAI/bge-base-en-v1.5",
+        index_type: str = "docs" # New: support 'docs' or 'faq'
     ):
         """
         Initialize vector store for an agent.
@@ -34,18 +37,23 @@ class VectorStore:
             agent_id: Unique identifier for the agent
             storage_dir: Directory to store vector indices
             model_name: Sentence Transformer model name
+            index_type: Type of index ('docs' or 'faq')
         """
         self.agent_id = agent_id
+        self.index_type = index_type
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(exist_ok=True, parents=True)
         
-        # Initialize embedding model
-        try:
-            self.model = SentenceTransformer(model_name)
-            logger.info(f"✅ Loaded embedding model: {model_name}")
-        except Exception as e:
-            logger.error(f"❌ Failed to load embedding model: {e}")
-            raise
+        # Initialize embedding model (using static cache)
+        if model_name not in VectorStore._model_cache:
+            try:
+                VectorStore._model_cache[model_name] = SentenceTransformer(model_name)
+                logger.info(f"✅ Loaded embedding model into cache: {model_name}")
+            except Exception as e:
+                logger.error(f"❌ Failed to load embedding model: {e}")
+                raise
+        
+        self.model = VectorStore._model_cache[model_name]
         
         # FAISS index (will be initialized when chunks are added)
         self.index: Optional[faiss.Index] = None
@@ -54,9 +62,22 @@ class VectorStore:
         # Metadata storage (maps index position to chunk metadata)
         self.metadata: List[Dict[str, Any]] = []
         
-        # File paths
-        self.index_path = self.storage_dir / f"{agent_id}.index"
-        self.metadata_path = self.storage_dir / f"{agent_id}_metadata.json"
+        # File paths (now including index_type)
+        # Standardization: Always use type suffix for new indices, 
+        # but check for old ones during loading
+        self.index_path = self.storage_dir / f"{agent_id}_{index_type}.index"
+        self.metadata_path = self.storage_dir / f"{agent_id}_{index_type}_metadata.json"
+        
+        # Fallback for older indices (without _type suffix)
+        if not self.index_path.exists() and (self.storage_dir / f"{agent_id}.index").exists():
+            old_index = self.storage_dir / f"{agent_id}.index"
+            old_meta = self.storage_dir / f"{agent_id}_metadata.json"
+            if old_index.exists():
+                import shutil
+                shutil.copy(str(old_index), str(self.index_path))
+                if old_meta.exists():
+                    shutil.copy(str(old_meta), str(self.metadata_path))
+                logger.info(f"📑 Migrated legacy index for agent {agent_id}")
         
         # Load existing index if available
         self._load_index()
@@ -72,11 +93,11 @@ class VectorStore:
                 with open(self.metadata_path, 'r', encoding='utf-8') as f:
                     self.metadata = json.load(f)
                 
-                logger.info(f"✅ Loaded existing vector index for agent {self.agent_id}: {len(self.metadata)} chunks")
+                logger.info(f"✅ Loaded existing {self.index_type} index for agent {self.agent_id}: {len(self.metadata)} chunks")
             else:
                 # Create new index
                 self.index = faiss.IndexFlatL2(self.dimension)  # L2 distance for cosine similarity
-                logger.info(f"📝 Created new vector index for agent {self.agent_id}")
+                logger.info(f"📝 Created new {self.index_type} index for agent {self.agent_id}")
         except Exception as e:
             logger.error(f"❌ Error loading index: {e}")
             # Create new index on error
@@ -94,7 +115,7 @@ class VectorStore:
                 with open(self.metadata_path, 'w', encoding='utf-8') as f:
                     json.dump(self.metadata, f, indent=2, ensure_ascii=False)
                 
-                logger.info(f"💾 Saved vector index: {len(self.metadata)} chunks")
+                logger.info(f"💾 Saved {self.index_type} index: {len(self.metadata)} chunks")
         except Exception as e:
             logger.error(f"❌ Error saving index: {e}")
     
@@ -158,14 +179,11 @@ class VectorStore:
         
         # Store metadata
         for chunk in valid_chunks:
-            chunk_metadata = {
-                'chunk_id': chunk.get('chunk_id', f"chunk-{len(self.metadata)}"),
-                'text': chunk.get('text', ''),
-                'url': chunk.get('url', ''),
-                'title': chunk.get('title', ''),
-                'chunk_index': len(self.metadata),  # Position in index
-                'metadata': chunk.get('metadata', {})  # Additional metadata
-            }
+            # Create metadata entry with all original fields
+            chunk_metadata = chunk.copy()
+            chunk_metadata.update({
+                'chunk_index': len(self.metadata)  # Position in index
+            })
             self.metadata.append(chunk_metadata)
         
         # Save to disk
@@ -250,6 +268,27 @@ class VectorStore:
             logger.error(f"❌ Error deleting index: {e}")
             return False
     
+    def rename_agent(self, new_agent_id: str) -> bool:
+        """Rename the agent ID and move files on disk"""
+        try:
+            new_index_path = self.storage_dir / f"{new_agent_id}_{self.index_type}.index"
+            new_metadata_path = self.storage_dir / f"{new_agent_id}_{self.index_type}_metadata.json"
+            
+            if self.index_path.exists():
+                self.index_path.rename(new_index_path)
+            if self.metadata_path.exists():
+                self.metadata_path.rename(new_metadata_path)
+            
+            self.agent_id = new_agent_id
+            self.index_path = new_index_path
+            self.metadata_path = new_metadata_path
+            
+            logger.info(f"🏷️  Renamed {self.index_type} index to agent {new_agent_id}")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Error renaming index: {e}")
+            return False
+            
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about the vector store"""
         return {

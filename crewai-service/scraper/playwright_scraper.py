@@ -33,7 +33,7 @@ class PlaywrightScraper(BaseScraper):
         timeout: int = 30,
         user_agent: str = "Chatbase-Clone-Scraper/1.0",
         page_timeout: int = 30000,
-        wait_until: str = "networkidle"
+        wait_until: str = "domcontentloaded"
     ):
         super().__init__(timeout, user_agent)
         self.page_timeout = page_timeout
@@ -101,7 +101,99 @@ class PlaywrightScraper(BaseScraper):
             # Wait a bit for any remaining dynamic content
             await page.wait_for_timeout(1000)
             
-            # Get HTML content
+            # Try to get text directly from page first (cleaner than HTML parsing)
+            try:
+                # Get visible text from main content areas
+                main_text = await page.evaluate("""
+                    () => {
+                        // Try to get text from main content areas
+                        const main = document.querySelector('main') || 
+                                   document.querySelector('article') || 
+                                   document.querySelector('[role="main"]') ||
+                                   document.querySelector('.content') ||
+                                   document.querySelector('#content') ||
+                                   document.body;
+                        
+                        if (!main) return '';
+                        
+                        // Clone to avoid modifying original
+                        const clone = main.cloneNode(true);
+                        
+                        // Remove unwanted elements
+                        clone.querySelectorAll('script, style, nav, header, footer, aside, iframe, svg, canvas, form, .ad, .advertisement, .sidebar, .social, .share, .comments, .cookie, .popup, .modal, .menu, .navigation').forEach(el => el.remove());
+                        
+                        return clone.innerText || clone.textContent || '';
+                    }
+                """)
+                
+                if main_text and len(main_text.strip()) > 100:
+                    logger.info(f"✅ [Playwright] Extracted {len(main_text)} chars directly from page")
+                    # Use direct text extraction - create a simple ScrapedPage
+                    from bs4 import BeautifulSoup
+                    html = await page.content()
+                    soup = BeautifulSoup(html, 'lxml')
+                    
+                    # Get title and metadata from HTML
+                    title = ''
+                    if soup.title:
+                        title = soup.title.get_text().strip()
+                    if not title:
+                        h1 = soup.find('h1')
+                        if h1:
+                            title = h1.get_text().strip()
+                    if not title:
+                        title = urlparse(url).path.split('/')[-1] or 'Untitled'
+                    
+                    # Extract headings and other metadata
+                    headings = []
+                    for i in range(1, 4):
+                        for heading in soup.find_all(f'h{i}'):
+                            text = heading.get_text().strip()
+                            if text:
+                                headings.append({"level": i, "text": text})
+                    
+                    paragraphs = []
+                    for p in soup.find_all('p'):
+                        text = p.get_text().strip()
+                        if text and len(text) > 10:
+                            paragraphs.append(text)
+                    
+                    images = []
+                    for img in soup.find_all('img', src=True):
+                        src = img.get('src', '').strip()
+                        alt = img.get('alt', '').strip()
+                        if src:
+                            if not src.startswith(('http://', 'https://')):
+                                src = urljoin(url, src)
+                            images.append({"src": src, "alt": alt or ""})
+                    
+                    meta_description = None
+                    meta_desc_tag = soup.find('meta', attrs={'name': 'description'}) or \
+                                   soup.find('meta', attrs={'property': 'og:description'})
+                    if meta_desc_tag:
+                        meta_description = meta_desc_tag.get('content', '').strip()
+                    
+                    links = self._extract_links(soup, url)
+                    
+                    scraped_page = ScrapedPage(
+                        url=url,
+                        title=title,
+                        meta_description=meta_description,
+                        headings=headings,
+                        paragraphs=paragraphs,
+                        images=images,
+                        main_content=main_text.strip(),
+                        links=links,
+                        timestamp=datetime.now().isoformat(),
+                        depth=0
+                    )
+                    
+                    logger.info(f"✅ [Playwright] Scraped {url}: {len(scraped_page.main_content)} chars, {len(scraped_page.headings)} headings")
+                    return scraped_page
+            except Exception as e:
+                logger.warning(f"⚠️  [Playwright] Direct text extraction failed, using HTML parsing: {e}")
+            
+            # Fallback: Get HTML content and parse with BeautifulSoup
             html = await page.content()
             
             # Extract content using BeautifulSoup (easier than Playwright selectors)

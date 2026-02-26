@@ -6,7 +6,7 @@ import { useAgentCreation } from '@/contexts/AgentCreationContext'
 
 export function AgentCreationStep3() {
   const router = useRouter()
-  const { state, updateSourceStatus, updateSourceQAPairs, setStep, clearSources } = useAgentCreation()
+  const { state, updateSourceStatus, updateSourceQAPairs, setStep, clearSources, setTempAgentId } = useAgentCreation()
   const [isProcessing, setIsProcessing] = useState(true)
   const [hasProcessed, setHasProcessed] = useState(false)
   const [processingSources, setProcessingSources] = useState<Set<string>>(new Set())
@@ -29,7 +29,7 @@ export function AgentCreationStep3() {
     const processSources = async () => {
       setIsProcessing(true)
       setHasProcessed(true)
-      
+
       // Process each source that hasn't been processed yet
       for (const source of state.sources) {
         // Skip if already completed, error, or currently processing
@@ -41,7 +41,7 @@ export function AgentCreationStep3() {
           // Mark as processing
           setProcessingSources(prev => new Set(prev).add(source.id))
           updateSourceStatus(source.id, 'processing')
-          
+
           // If it's a link source, scrape it
           if (source.type === 'link' && source.url) {
             try {
@@ -63,7 +63,13 @@ export function AgentCreationStep3() {
               if (response.ok) {
                 const data = await response.json()
                 console.log(`Scraping successful for ${source.url}:`, data.data?.qaPairsCount || 0, 'Q&A pairs')
-                
+
+                // Save temp agent ID if available
+                if (data.data?.tempAgentId) {
+                  console.log('Saving temp agent ID:', data.data.tempAgentId)
+                  setTempAgentId(data.data.tempAgentId)
+                }
+
                 // Update source with scraped Q&A pairs
                 if (data.data?.qaPairs && data.data.qaPairs.length > 0) {
                   // Update the source with Q&A pairs
@@ -122,7 +128,7 @@ export function AgentCreationStep3() {
           })
         }
       }
-      
+
       setIsProcessing(false)
     }
 
@@ -177,13 +183,13 @@ export function AgentCreationStep3() {
                         ? source.type === 'link' && source.qaPairs && source.qaPairs.length > 0
                           ? `Scraped successfully - ${source.qaPairs.length} Q&A pairs generated`
                           : source.type === 'link'
-                          ? 'Scraped successfully (no Q&A pairs generated)'
-                          : 'Data fetched successfully'
+                            ? 'Scraped successfully (no Q&A pairs generated)'
+                            : 'Data fetched successfully'
                         : source.status === 'processing'
-                        ? 'Scraping website and generating Q&A pairs...'
-                        : source.status === 'error'
-                        ? 'Failed to scrape. Please try again or check the URL.'
-                        : 'Pending...'}
+                          ? 'Scraping website and generating Q&A pairs...'
+                          : source.status === 'error'
+                            ? 'Failed to scrape. Please try again or check the URL.'
+                            : 'Pending...'}
                     </p>
                   </div>
                 </div>

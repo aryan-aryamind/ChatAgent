@@ -58,10 +58,10 @@ export function AgentCreationStep4() {
 
   const handleCreateAgent = async () => {
     setIsCreating(true)
-    
+
     // Simulate API call to create agent
     await new Promise((resolve) => setTimeout(resolve, 2000))
-    
+
     // Extract agent name from website URL or use default
     let agentName = 'Untitled Agent'
     if (state.details?.websiteUrl) {
@@ -81,7 +81,7 @@ export function AgentCreationStep4() {
 
     // Create the agent object
     const newAgent = {
-      id: Date.now().toString(),
+      id: state.agentId || Date.now().toString(),
       name: agentName,
       websiteUrl: state.details?.websiteUrl,
       useCase: state.details?.useCase,
@@ -99,12 +99,35 @@ export function AgentCreationStep4() {
       conversations: 0,
       sources: state.sources.length,
     }
-    
+
     // Add agent to the list
     addAgent(newAgent)
-    
+
+    // Rename content/vector store if we have a temporary agent ID from scraping
+    if (state.tempAgentId) {
+      try {
+        console.log(`Renaming content from ${state.tempAgentId} to ${newAgent.id}`)
+        toast.info('Finalizing agent knowledge base...')
+
+        await fetch('/api/agents/rename', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            oldAgentId: state.tempAgentId,
+            newAgentId: newAgent.id,
+          }),
+        })
+        console.log('Agent content renamed successfully')
+      } catch (error) {
+        console.error('Error renaming agent content:', error)
+        toast.warning('Agent created, but knowledge base connection may need attention')
+      }
+    }
+
     toast.success('Agent created successfully!')
-    
+
     // Reset context and redirect to agents page
     reset()
     router.push('/agents')
@@ -179,33 +202,33 @@ export function AgentCreationStep4() {
               <>
                 <div>
                   <Label className="mb-2 block">Model</Label>
-              <Select value={selectedModelId} onValueChange={handleModelChange}>
-                <SelectTrigger>
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4" />
-                    <SelectValue>{selectedModel?.name}</SelectValue>
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  {availableModels.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      <div>
-                        <div className="font-medium">{model.name}</div>
-                        <div className="text-xs text-muted-foreground">{model.description}</div>
+                  <Select value={selectedModelId} onValueChange={handleModelChange}>
+                    <SelectTrigger>
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4" />
+                        <SelectValue>{selectedModel?.name}</SelectValue>
                       </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedModelId === 'gpt-5.1' && (
-                <div className="mt-2 p-3 bg-gradient-to-r from-orange-500/10 to-purple-500/10 border border-orange-500/20 rounded-lg flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Upgrade for more advanced models</span>
-                  <Button variant="outline" size="sm">
-                    <ArrowUp className="h-4 w-4 mr-1" />
-                    Upgrade
-                  </Button>
-                </div>
-              )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableModels.map((model) => (
+                        <SelectItem key={model.id} value={model.id}>
+                          <div>
+                            <div className="font-medium">{model.name}</div>
+                            <div className="text-xs text-muted-foreground">{model.description}</div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedModelId === 'gpt-5.1' && (
+                    <div className="mt-2 p-3 bg-gradient-to-r from-orange-500/10 to-purple-500/10 border border-orange-500/20 rounded-lg flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Upgrade for more advanced models</span>
+                      <Button variant="outline" size="sm">
+                        <ArrowUp className="h-4 w-4 mr-1" />
+                        Upgrade
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <div>

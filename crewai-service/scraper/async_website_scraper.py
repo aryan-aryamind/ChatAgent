@@ -16,6 +16,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 import aiofiles
+import random
 
 # Try to import chardet for encoding detection, but don't fail if not available
 try:
@@ -55,12 +56,12 @@ class AsyncScrapeOptions:
     """Options for async website scraping"""
     max_pages: int = 100
     max_depth: int = 5
-    concurrency: int = 5
-    delay: float = 0.3
+    concurrency: int = 2  # Further reduced for stability
+    delay: float = 0.8    # Increased base delay
     timeout: int = 30
     follow_external: bool = False
     respect_robots: bool = True
-    user_agent: str = "Chatbase-Clone-Scraper/1.0 (AI Chatbot Platform)"
+    user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
     include_patterns: Optional[List[str]] = None
     exclude_patterns: Optional[List[str]] = None
 
@@ -109,7 +110,7 @@ class AsyncWebsiteScraper:
                 "User-Agent": self.options.user_agent,
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate, br",
+                "Accept-Encoding": "gzip, deflate",
                 "Connection": "keep-alive",
                 "Upgrade-Insecure-Requests": "1",
             }
@@ -238,9 +239,51 @@ class AsyncWebsiteScraper:
                     # Parse robots.txt content
                     self.robots_parser.read()
                     logger.info("Loaded robots.txt")
+                    
+                    # Check for sitemaps in robots.txt
+                    # robots_parser doesn't expose sitemaps easily in some versions, 
+                    # so we grep it manually
+                    content = response.text
+                    sitemap_matches = re.findall(r'^Sitemap:\s*(.+)$', content, re.MULTILINE | re.IGNORECASE)
+                    for sm in sitemap_matches:
+                        sitemap_url = sm.strip()
+                        logger.info(f"📍 Found sitemap in robots.txt: {sitemap_url}")
+                        await self._discover_sitemap_urls(sitemap_url)
         except Exception as e:
             logger.warning(f"Could not load robots.txt: {e}")
             self.robots_parser = None
+
+    async def _discover_sitemap_urls(self, sitemap_url: str):
+        """Discover URLs from a sitemap or sitemap index"""
+        try:
+            async with httpx.AsyncClient(**self.client_config) as client:
+                response = await client.get(sitemap_url)
+                if response.status_code != 200:
+                    return
+
+                # Very basic XML parsing for <loc> tags
+                # This works for both sitemap indices and standard sitemaps
+                content = response.text
+                loc_tags = re.findall(r'<loc>(.+?)</loc>', content)
+                
+                added_count = 0
+                for loc in loc_tags:
+                    loc = loc.strip()
+                    if loc.endswith(('.xml', '.xml.gz')) and 'sitemap' in loc.lower():
+                        # It's a sitemap index entry
+                        await self._discover_sitemap_urls(loc)
+                    else:
+                        # It's a page URL
+                        normalized = self._normalize_url(loc, self.base_url)
+                        if normalized and normalized not in self.visited_urls:
+                            if self._is_same_domain(normalized, self.base_url):
+                                await self.queue.put((normalized, 0)) # Sitemaps are depth 0
+                                added_count += 1
+                
+                if added_count > 0:
+                    logger.info(f"✅ Added {added_count} URLs from sitemap: {sitemap_url}")
+        except Exception as e:
+            logger.warning(f"Error parsing sitemap {sitemap_url}: {e}")
     
     def _extract_content(self, soup: BeautifulSoup, url: str) -> Dict[str, Any]:
         """
@@ -306,16 +349,29 @@ class AsyncWebsiteScraper:
             '.post-body', '.entry-body', '.container', '.wrapper'
         ]
         
+        content_containers = []
         for selector in content_selectors:
             try:
-                main_content = soup.select_one(selector)
-                if main_content:
-                    break
+                found = soup.select(selector)
+                if found:
+                    for element in found:
+                        # Avoid duplicates if we use overlapping selectors
+                        if element not in content_containers:
+                            content_containers.append(element)
+                    # If we found major containers, we can stop or keep looking for others
+                    # For now, let's keep looking to get all relevant sections
             except Exception:
                 continue
         
-        # If no main content found, use body
-        if not main_content:
+        # If we found specific containers, use them. Otherwise fallback.
+        if content_containers:
+            # Create a combined container to clean and extract from
+            main_content = soup.new_tag('div')
+            for container in content_containers:
+                # Deep copy to avoid modifying the original soup too much during iteration
+                import copy
+                main_content.append(copy.copy(container))
+        else:
             main_content = soup.find('body')
             if not main_content:
                 # If no body tag, use the whole soup
@@ -377,6 +433,15 @@ class AsyncWebsiteScraper:
         # Get text content with better formatting - same as BeautifulSoupScraper
         try:
             main_text = main_content.get_text(separator='\n', strip=True)
+            
+            # Clean up common markdown patterns that leak into text (e.g. from developer docs)
+            # Strips [text](/url) -> text
+            main_text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', main_text)
+            
+            # Clean up repeated newlines and extra spaces
+            main_text = re.sub(r'\n{3,}', '\n\n', main_text)
+            main_text = re.sub(r' +', ' ', main_text)
+            
             # Debug: log if we got text
             if main_text:
                 logger.debug(f"Extracted {len(main_text)} chars from main_content for {url}")
@@ -436,7 +501,6 @@ class AsyncWebsiteScraper:
             try:
                 ultimate_text = soup.get_text(separator='\n', strip=True)
                 # Remove excessive whitespace
-                import re
                 ultimate_text = re.sub(r'\n{3,}', '\n\n', ultimate_text)
                 if ultimate_text and len(ultimate_text.strip()) > len(main_text or ''):
                     main_text = ultimate_text[:5000]  # Limit to avoid too much
@@ -523,28 +587,115 @@ class AsyncWebsiteScraper:
                 # Mark as visited immediately to avoid duplicates
                 self.visited_urls.add(url)
                 
-                # Fetch page
+                # Fetch page with retry logic for 429s
+                max_retries = 3
+                retry_count = 0
+                response = None
+                
                 async with httpx.AsyncClient(**self.client_config) as client:
-                    response = await client.get(url)
+                    while retry_count <= max_retries:
+                        response = await client.get(url)
+                        
+                        if response.status_code == 429:
+                            retry_count += 1
+                            if retry_count > max_retries:
+                                logger.error(f"❌ Max retries reached for {url} after 429s.")
+                                break
+                                
+                            # Respect Retry-After header if present
+                            retry_after = response.headers.get("Retry-After")
+                            if retry_after and retry_after.isdigit():
+                                wait_time = int(retry_after)
+                            else:
+                                # Exponential backoff: 5, 10, 20 seconds + jitter
+                                wait_time = (2 ** (retry_count - 1)) * 5 + random.uniform(0, 2)
+                                
+                            logger.warning(f"⚠️  Rate limited (429) for {url}. Retry {retry_count}/{max_retries}. Waiting {wait_time:.1f}s...")
+                            await asyncio.sleep(wait_time)
+                            continue
+                        
+                        # Not a 429, break the loop
+                        break
+                        
+                    if not response:
+                        return None
+                        
                     response.raise_for_status()
                     
-                    # Parse HTML - use same approach as BeautifulSoupScraper
+                    # Get HTML text - httpx handles decompression (gzip, deflate) automatically
+                    # and uses detected encoding from headers or content
+                    html_text = response.text
                     html_content = response.content
                     html_size = len(html_content)
                     logger.debug(f"📄 Parsed HTML for {url}: {html_size} bytes")
                     
-                    # Parse HTML - use lxml parser (same as BeautifulSoupScraper)
-                    soup = BeautifulSoup(html_content, 'lxml')
+                    # Try to detect encoding for better accuracy if needed
+                    # but only as a fallback or for logging
+                    encoding = response.encoding or 'utf-8'
+                    logger.debug(f"   - Response encoding: {encoding}")
+                    
+                    # Parse HTML - try multiple parsers with fallback
+                    soup = None
+                    parsers = ['lxml', 'html.parser', 'html5lib']
+                    
+                    for parser_name in parsers:
+                        try:
+                            soup = BeautifulSoup(html_text, parser_name)
+                            # Verify parsing worked and found elements
+                            if soup and len(soup.find_all()) > 0:
+                                logger.debug(f"   - Successfully parsed with {parser_name}")
+                                break
+                            elif soup:
+                                logger.debug(f"   - {parser_name} parsed but found 0 elements, trying next parser")
+                                soup = None
+                        except Exception as e:
+                            logger.debug(f"   - {parser_name} parser failed: {e}")
+                            soup = None
+                            continue
+                    
+                    # If all parsers failed, try parsing raw bytes
+                    if not soup or len(soup.find_all()) == 0:
+                        logger.warning(f"   - All text parsers failed, trying raw bytes with html.parser")
+                        try:
+                            soup = BeautifulSoup(html_content, 'html.parser')
+                        except Exception as e:
+                            logger.error(f"   - Raw bytes parsing also failed: {e}")
                     
                     # Verify parsing worked
                     if not soup:
-                        raise ValueError("Failed to parse HTML - soup is None")
+                        raise ValueError("Failed to parse HTML - all parsers failed")
                     
                     # Debug: check if we can find basic elements
                     body_found = soup.find('body') is not None
                     html_found = soup.find('html') is not None
                     total_elements = len(soup.find_all())
                     logger.debug(f"   - Soup has body: {body_found}, html: {html_found}, total elements: {total_elements}")
+                    
+                    # If still no elements found, check if it's a JS-heavy site
+                    if total_elements == 0:
+                        html_preview = html_text[:500] if 'html_text' in locals() else str(html_content[:500])
+                        logger.error(f"   - No elements found! HTML preview: {html_preview}")
+                        
+                        # Detect JavaScript-heavy sites
+                        js_indicators = [
+                            'root', 'app', '__next__', 'react-root', 'vue-app',
+                            'ng-app', 'data-reactroot', 'id="root"', 'id="app"'
+                        ]
+                        html_lower = html_preview.lower()
+                        is_js_heavy = any(indicator in html_lower for indicator in js_indicators)
+                        
+                        if is_js_heavy or html_size > 10000:
+                            logger.warning(f"   - ⚠️  This appears to be a JavaScript-heavy site (React/Vue/Next.js). "
+                                         f"BeautifulSoup cannot extract content from JS-rendered pages. "
+                                         f"Consider using PlaywrightScraper or HybridScraper for this URL.")
+                        
+                        # Try one more time with html.parser on raw text
+                        try:
+                            soup = BeautifulSoup(html_text, 'html.parser')
+                            total_elements = len(soup.find_all())
+                            logger.debug(f"   - Retry with html.parser: {total_elements} elements")
+                        except Exception as e:
+                            logger.error(f"   - Final retry failed: {e}")
                     
                     # Extract content
                     extracted = self._extract_content(soup, url)
@@ -590,7 +741,9 @@ class AsyncWebsiteScraper:
                     return page
                     
             except httpx.HTTPStatusError as e:
-                error_msg = f"HTTP {e.response.status_code}: {e.response.status_text}"
+                # httpx.Response uses reason_phrase, not status_text
+                reason = e.response.reason_phrase if hasattr(e.response, "reason_phrase") else "Unknown Error"
+                error_msg = f"HTTP {e.response.status_code}: {reason}"
                 logger.warning(f"❌ HTTP error for {url}: {error_msg}")
                 self.errors.append({"url": url, "error": error_msg})
                 return None

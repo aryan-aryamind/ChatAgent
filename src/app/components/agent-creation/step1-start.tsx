@@ -8,7 +8,7 @@ import { useAgentCreation } from '@/contexts/AgentCreationContext'
 
 export function AgentCreationStep1() {
   const router = useRouter()
-  const { setDetails, setStep, addSource } = useAgentCreation()
+  const { setDetails, setStep, addSource, setAgentId } = useAgentCreation()
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [useCase, setUseCase] = useState('general')
   const [isLoading, setIsLoading] = useState(false)
@@ -16,11 +16,15 @@ export function AgentCreationStep1() {
   const handleContinue = async () => {
     if (!websiteUrl) return
 
+    // Generate permanent agent ID immediately
+    const permanentId = Date.now().toString()
+    setAgentId(permanentId)
+
     setIsLoading(true)
-    
+
     // Normalize URL
     const normalizedUrl = websiteUrl.startsWith('http') ? websiteUrl : `https://${websiteUrl}`
-    
+
     // Save details to context
     setDetails({
       name: '', // Will be set later
@@ -37,7 +41,7 @@ export function AgentCreationStep1() {
       url: normalizedUrl,
       status: 'pending' as const,
     }
-    
+
     addSource(urlSource)
 
     // Simulate API call
@@ -50,6 +54,10 @@ export function AgentCreationStep1() {
   }
 
   const handleManualSetup = () => {
+    // Generate permanent agent ID immediately
+    const permanentId = Date.now().toString()
+    setAgentId(permanentId)
+
     // Clear any sources if user wants manual setup
     // This allows them to go to Step 2 and add sources manually
     setStep(2)

@@ -15,7 +15,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   confidence?: number;
-  sources?: string[];
+  sources?: any[];
   tokens?: number;
   responseTime?: number;
   intent?: string;
@@ -129,6 +129,10 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
           responseMode: responseMode,
           qaPairs: agent?.qaPairs || [],
           intentConfidence: agent?.crewaiSettings?.intentConfidence || 0.8,
+          history: messages.slice(-5).map(m => ({
+            role: m.role,
+            content: m.content
+          })),
         }),
       });
 
@@ -368,7 +372,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
               <p className="text-xs text-primary flex items-start gap-2">
                 <Zap className="h-3 w-3 mt-0.5 flex-shrink-0" />
                 <span>
-                  CrewAI matches user queries to Q&A pairs based on intent similarity. 
+                  CrewAI matches user queries to Q&A pairs based on intent similarity.
                   Configure advanced settings in the Settings tab.
                 </span>
               </p>
@@ -418,7 +422,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
         </div>
 
         {/* Messages */}
-        <div 
+        <div
           ref={messagesContainerRef}
           onScroll={handleScroll}
           className="flex-1 overflow-y-auto p-6 space-y-4"
@@ -434,18 +438,17 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
                   <Bot className="h-5 w-5 text-white" />
                 </div>
               )}
-              
+
               <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'} max-w-2xl`}>
                 <div
-                  className={`rounded-2xl px-4 py-3 ${
-                    message.role === 'user'
-                      ? 'bg-primary text-white rounded-tr-sm'
-                      : 'bg-secondary rounded-tl-sm'
-                  }`}
+                  className={`rounded-2xl px-4 py-3 ${message.role === 'user'
+                    ? 'bg-primary text-white rounded-tr-sm'
+                    : 'bg-secondary rounded-tl-sm'
+                    }`}
                 >
                   <p className="text-sm leading-relaxed">{message.content}</p>
                 </div>
-                
+
                 {message.role === 'assistant' && (
                   <div className="flex flex-col gap-2 mt-2 text-xs text-text-muted">
                     {message.intent && (
@@ -475,7 +478,11 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
                     {message.sources && message.sources.length > 0 && (
                       <div className="flex items-center gap-1">
                         <FileText className="h-3 w-3" />
-                        <span>Sources: {message.sources.join(', ')}</span>
+                        <span>
+                          Sources: {message.sources.map(s =>
+                            typeof s === 'string' ? s : (s.title || s.url || 'Unknown Source')
+                          ).join(', ')}
+                        </span>
                       </div>
                     )}
                     {(message.tokens || message.responseTime) && (
@@ -487,7 +494,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
                   </div>
                 )}
               </div>
-              
+
               {message.role === 'user' && (
                 <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
                   <User className="h-5 w-5" />
@@ -532,9 +539,9 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
               placeholder="Type your message..."
               className="flex-1"
             />
-            <Button 
-              onClick={handleSend} 
-              size="icon" 
+            <Button
+              onClick={handleSend}
+              size="icon"
               className="bg-primary hover:bg-primary/90"
               disabled={isLoading}
             >

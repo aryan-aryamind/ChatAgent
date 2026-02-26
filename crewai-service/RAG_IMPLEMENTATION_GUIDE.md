@@ -144,9 +144,7 @@ rag.index_content(scraped_pages)
 
 # Answer questions
 result = rag.answer(
-    query="What is your pricing?",
-    top_k=5,
-    confidence_threshold=0.35
+    query="What is your pricing?"
 )
 ```
 
@@ -168,7 +166,8 @@ if request.agent_id:
     content_storage.save_content(request.agent_id, response_data)
     
     # Index into vector store (NEW)
-    rag_agent = RAGAgent(agent_id=request.agent_id, llm_agent=llm_agent)
+    from main import get_rag_agent
+    rag_agent = get_rag_agent(request.agent_id)
     rag_agent.index_content(scraped_content.pages)
 ```
 
@@ -176,11 +175,12 @@ if request.agent_id:
 
 ```python
 # In /chat-content endpoint (already integrated)
-rag_agent = RAGAgent(agent_id=request.agent_id, llm_agent=llm_agent)
+from main import get_rag_agent
+rag_agent = get_rag_agent(request.agent_id)
 result = rag_agent.answer(
     query=request.message,
-    top_k=5,
-    confidence_threshold=0.35
+    qa_pairs=qa_pairs_dict,
+    history=request.history
 )
 ```
 
@@ -286,10 +286,9 @@ async def chat_with_content(request: ContentChatRequest):
     # Answer question
     result = rag_agent.answer(
         query=request.message,
-        top_k=5,
-        min_similarity=0.2,
-        confidence_threshold=request.confidence_threshold,
-        max_context_length=2000
+        max_context_length=2000,
+        qa_pairs=qa_pairs_dict,
+        history=request.history
     )
     
     return ContentChatResponse(

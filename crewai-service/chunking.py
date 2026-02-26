@@ -18,17 +18,12 @@ class SemanticChunker:
     
     def __init__(
         self,
-        chunk_size: int = 400,  # Target tokens (~300-500)
-        chunk_overlap: int = 50,  # Overlap tokens for context preservation
-        min_chunk_size: int = 50  # Minimum chunk size
+        chunk_size: int = 600,  # Roadmap: 400-700 tokens
+        chunk_overlap: int = 100,  # Roadmap: 100 tokens
+        min_chunk_size: int = 50   # Minimum meaningful text
     ):
         """
-        Initialize chunker.
-        
-        Args:
-            chunk_size: Target chunk size in tokens (approximate)
-            chunk_overlap: Overlap between chunks in tokens
-            min_chunk_size: Minimum chunk size in tokens
+        Initialize chunker with production-level defaults.
         """
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -36,10 +31,10 @@ class SemanticChunker:
     
     def _estimate_tokens(self, text: str) -> int:
         """
-        Estimate token count (rough approximation: ~4 chars per token).
-        For more accuracy, could use tiktoken or transformers tokenizer.
+        Slightly better token estimation (1 token ≈ 3.5 characters for technical text).
+        In production, use tiktoken for GPT models.
         """
-        return len(text) // 4
+        return int(len(text) / 3.5)
     
     def _split_into_sentences(self, text: str) -> List[str]:
         """

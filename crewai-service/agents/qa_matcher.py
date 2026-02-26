@@ -56,10 +56,28 @@ class QAMatcherAgent:
         # Use semantic similarity if model is available
         if self.model:
             try:
+                # First check for exact matching (very high priority)
+                message_normalized = message.lower().strip()
+                for qa in relevant_pairs:
+                    if not qa.get('question'):
+                        continue
+                    if qa['question'].lower().strip() == message_normalized:
+                        matches_with_scores.append({
+                            'qa': qa,
+                            'score': 1.0
+                        })
+                        continue # Skip semantic search for this one if exact match found
+                
+                # If we don't have enough exact matches, use semantic similarity
                 message_embedding = self.model.encode([message], convert_to_numpy=True)
                 for qa in relevant_pairs:
                     if not qa.get('question'):
                         continue
+                    
+                    # Skip if already added as exact match
+                    if any(m['qa'] == qa and m['score'] == 1.0 for m in matches_with_scores):
+                        continue
+                        
                     question_embedding = self.model.encode([qa['question']], convert_to_numpy=True)
                     
                     # Calculate cosine similarity
