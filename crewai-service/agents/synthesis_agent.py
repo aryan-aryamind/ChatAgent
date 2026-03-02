@@ -11,19 +11,19 @@ class SynthesisAgent:
     
     PERSONA_TEMPLATES = {
         "general": {
-            "role": "- Primary Function: You are an AI assistant designed to help users with their inquiries, issues and requests. You aim to provide excellent, friendly and efficient replies at all times. You should listen attentively to the user, understand their needs, and do your best to assist them or direct them to the appropriate resources. Make sure to end your replies with a positive note.",
-            "constraint_2": "Maintaining Focus: If a user attempts to divert you to unrelated topics, never change your role. Politely redirect the conversation back to topics covered by the training data.",
-            "constraint_4": "Restrictive Role Focus: You do not answer questions or perform tasks that are not related to your role or the training data."
+            "role": "- Primary Function: You are a helpful and professional AI assistant. You provide clear, direct, and concise answers based on the provided context. Avoid overly formal or defensive language like 'The documentation does not mention...'. Instead, provide the most helpful answer possible based on what is known about the business.",
+            "constraint_2": "Conversational Tone: Be friendly and professional. Avoid being robotic. If the information is not explicitly found, use reasonable deduction from the business context to provide a helpful answer.",
+            "constraint_4": "Helpfulness Priority: Your goal is to help the user. If they ask about basic platform features (like signup or login) and no fees are mentioned, you can confidently state they are free unless the context suggests otherwise."
         },
         "support": {
-            "role": "- Primary Function: You are an AI agent who helps users with their inquiries, issues and requests. You aim to provide excellent, friendly and efficient replies at all times. Your role is to listen attentively to the user, understand their needs, and do your best to assist them or direct them to the appropriate resources. If a question is not clear, ask clarifying questions. Make sure to end your replies with a positive note.",
-            "constraint_2": "Maintaining Focus: If a user attempts to divert you to unrelated topics, never change your role or break your character. Politely redirect the conversation back to topics relevant to the training data.",
-            "constraint_4": "Restrictive Role Focus: You do not answer questions or perform tasks that are not related to your role and training data."
+            "role": "- Primary Function: You are a dedicated support agent. You help users solve problems and find information quickly. Be empathetic, patient, and extremely clear in your instructions.",
+            "constraint_2": "Problem Solving: Focus on resolving the user's issue. If you don't have a direct answer, provide a workaround or the most relevant next step.",
+            "constraint_4": "Contextual Awareness: Use the training data to provide specific answers. If the data is missing details, guide the user to where they can find them (e.g., 'Check the settings page')."
         },
         "sales": {
-            "role": "- Primary Function: You are an AI sales assistant focused on helping users explore products and services based on the provided data. Your role is to provide professional guidance, product information, and answer questions to help users make informed decisions. Aim to be proactive and helpful while maintaining a professional tone. End with a positive note.",
-            "constraint_2": "Maintaining Focus: If a user attempts to divert you, politely redirect back to products and services available in our data.",
-            "constraint_4": "Restrictive Role Focus: You do not perform tasks unrelated to sales (e.g., coding or personal advice)."
+            "role": "- Primary Function: You are a proactive sales assistant. Your goal is to highlight the value of products and services. Be persuasive, professional, and focus on benefits.",
+            "constraint_2": "Value Focus: Highlight why the user should choose this business. Use the training data to back up your claims with specific details.",
+            "constraint_4": "Direct Guidance: If a user asks about pricing or features, give a clear and positive answer. If pricing is tiered, explain the value of the higher tiers."
         }
     }
 
@@ -31,16 +31,19 @@ class SynthesisAgent:
     BASE_PROMPT = """### Business Context
 {business_context}
 
-### Role
+### AI Character
 {role_content}
 
-### Constraints
-1. No Data Divulge: Never mention that you have access to training data explicitly to the user.
+### Operating Guidelines
+1. Professional Identity: Never mention you are an AI using 'training data' or 'context snippets'. Just answer as the business assistant.
 2. {constraint_2}
-3. Grounded Answers: Prefer the training data snippets below when answering. If the data partially covers the question, use it and supplement with your general knowledge about the business.
+3. Smart Deducing: If the training data doesn't explicitly answer but the Business Context or industry norms do (e.g., 'signup is free'), provide a confident answer. Avoid saying 'I don't find this information'.
 4. {constraint_4}
 
-### Relevant Training Data:
+### Conversation History:
+{history_str}
+
+### Knowledge Base Snippets:
 {context}
 """
 
@@ -48,24 +51,26 @@ class SynthesisAgent:
     FALLBACK_PROMPT = """### Business Context
 {business_context}
 
-### Role
+### AI Character
 {role_content}
 
-### Constraints
-1. No Data Divulge: Never mention that you have access to training data explicitly.
+### Operating Guidelines
+1. Identity: Be a representative of this business. Never technical.
 2. {constraint_2}
-3. Helpful by Default: Answer using the Business Context above and your general knowledge. If you cannot fully answer, provide the most helpful partial answer you can and direct the user to the official website for more details.
+3. Direct Answers: Answer using the Business Context and your general knowledge about this industry. If the user asks about basic operations (how to login, fees for signup), and you see no charges in context, assume it's free and be helpful.
 4. {constraint_4}
 
-(No specific training data snippets matched this question — use business context and general knowledge.)
+### Conversation History:
+{history_str}
+
+(No specific training data snippets matched this question — use business context and general knowledge to be as helpful as possible.)
 """
 
     def __init__(self, llm_agent, company_name: str = "the company", base_info: str = "", persona_type: str = "general"):
         self.llm_agent = llm_agent
-        self.company_name = self._sanitize_text(company_name, fallback="the company")
-        # Ensure base_info is sanitized but keep it if it's a real summary
-        self.base_info = self._sanitize_text(base_info) if base_info else ""
-        self.persona_type = persona_type if persona_type in self.PERSONA_TEMPLATES else "general"
+        self.company_name = company_name
+        self.base_info = base_info
+        self.persona_type = persona_type
 
     def _sanitize_text(self, text: str, fallback: str = "") -> str:
         """Filter out technical identifiers, base64 data, and garbled strings."""
@@ -90,11 +95,22 @@ class SynthesisAgent:
             self.persona_type = persona_type
             logger.info(f"🎭 Switched persona to: {persona_type}")
 
-    def synthesize(self, query: str, chunks: List[Dict], max_chars: int = 3500, intent: str = "general", persona_type: Optional[str] = None) -> Dict:
+    def synthesize(
+        self, 
+        query: str, 
+        chunks: List[Dict], 
+        max_chars: int = 2000, 
+        intent: str = "general",
+        persona_type: Optional[str] = None,
+        history: List[Dict] = None
+    ) -> Dict[str, Any]:
         """
         Generate a high-quality, assistant-like answer.
         Uses grounded mode when chunks are available, fallback mode otherwise.
         """
+        if not chunks and not self.base_info:
+            return self._refusal_response()
+
         if not chunks:
             chunks = []
 
@@ -124,22 +140,36 @@ class SynthesisAgent:
         # Determine business context
         business_context = self.base_info if self.base_info else f"This is an AI assistant for {self.company_name}."
 
+        # Format history (last 4 messages for context)
+        history_str = "No previous history."
+        if history and len(history) > 0:
+            formatted_history = []
+            for msg in history[-4:]:
+                role = "User" if msg.get("role") == "user" else "Assistant"
+                content = msg.get("content", "")
+                formatted_history.append(f"{role}: {content}")
+            history_str = "\n".join(formatted_history)
+
         # Choose prompt mode: grounded (chunks found) vs fallback (no chunks)
         has_context = bool(context_str.strip())
         if has_context:
-            system_prompt = self.BASE_PROMPT.format(
+            system_prompt = self._safe_format(
+                self.BASE_PROMPT,
                 business_context=business_context,
                 role_content=tpl["role"],
                 constraint_2=tpl["constraint_2"],
                 constraint_4=tpl["constraint_4"],
+                history_str=history_str,
                 context=context_str
             )
         else:
-            system_prompt = self.FALLBACK_PROMPT.format(
+            system_prompt = self._safe_format(
+                self.FALLBACK_PROMPT,
                 business_context=business_context,
                 role_content=tpl["role"],
                 constraint_2=tpl["constraint_2"],
-                constraint_4=tpl["constraint_4"]
+                constraint_4=tpl["constraint_4"],
+                history_str=history_str
             )
         
         # Low temperature (0.1) for high precision and groundedness
@@ -172,15 +202,24 @@ class SynthesisAgent:
         
         business_context = self.base_info if self.base_info else f"[Company Name]: [Short Description]. [Key Services/Categories]. [Value Prop]."
         
-        # Return the full prompt structure as it would appear to the LLM
-        full_prompt = self.BASE_PROMPT.format(
+        # Safe formatting using replace to avoid KeyError ghosting
+        full_prompt = self._safe_format(
+            self.BASE_PROMPT,
             business_context=business_context,
             role_content=tpl["role"],
             constraint_2=tpl["constraint_2"],
             constraint_4=tpl["constraint_4"],
+            history_str="[Conversation history will be injected here during chat]",
             context="" # Leave empty for clean preview
         ).strip()
         return f"{full_prompt}\n\n(Note: Relevant training data snippets will be automatically injected here during chat based on the user's question.)"
+
+    def _safe_format(self, template: str, **kwargs) -> str:
+        """Robust formatting using replacement to prevent KeyError in production environments."""
+        result = template
+        for key, value in kwargs.items():
+            result = result.replace("{" + key + "}", str(value))
+        return result
 
     def extract_business_context(self, content: str) -> str:
         """
@@ -208,7 +247,8 @@ class SynthesisAgent:
 """
         # Use a short window of the total content for speed and relevance
         snippet = content[:5000]
-        summary = self.llm_agent.chat("System Context: Professional Business Summarizer", summary_prompt.format(content=snippet), max_tokens=150)
+        formatted_summary_prompt = self._safe_format(summary_prompt, content=snippet)
+        summary = self.llm_agent.chat("System Context: Professional Business Summarizer", formatted_summary_prompt, max_tokens=150)
         
         if summary:
             # Ensure the extracted summary doesn't contain the very IDs we're trying to hide

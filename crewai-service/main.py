@@ -481,16 +481,6 @@ async def chat_with_content(request: ContentChatRequest):
             for q in question_words
         )
 
-        # Simplified greeting response (no company extractor)
-        if (is_greeting or is_casual) and not has_question:
-            greeting_text = "Hi! How can I help you today? 😊"
-            return ContentChatResponse(
-                text=greeting_text,
-                intent="greeting" if is_greeting else "casual",
-                confidence=95 if is_greeting else 90,
-                sources=[],
-            )
-
         # Prepare QA pairs as list of dicts for RAG agent
         qa_pairs_dict = []
         if request.qa_pairs:
@@ -652,23 +642,24 @@ async def get_agent_settings(agent_id: str, persona_type: str = None):
     """
     try:
         content_data = content_storage.load_content(agent_id)
+        
+        # Determine active persona and business context
         if not content_data:
-            raise HTTPException(status_code=404, detail="Agent not found")
+            # For new agents without content, provide defaults
+            active_persona = persona_type or "general"
+            business_context = ""
+            system_prompt = "" # Will be generated below
+        else:
+            active_persona = persona_type or content_data.get("persona_type", "general")
+            business_context = content_data.get("business_context", "")
+            if not business_context:
+                base_url = content_data.get("base_url", "")
+                business_context = f"This is an AI support assistant for {base_url}" if base_url else ""
+            system_prompt = content_data.get("system_prompt")
         
-        # Use provided persona_type override, or fallback to stored value
-        active_persona = persona_type or content_data.get("persona_type", "general")
-        business_context = content_data.get("business_context", "")
-        
-        if not business_context:
-            base_url = content_data.get("base_url", "")
-            business_context = f"This is an AI support assistant for {base_url}" if base_url else ""
-        
-        # Get prompt from synthesizer (ensure it has the right company info)
-        rag_agent = get_rag_agent(agent_id, base_company_info=business_context, persona_type=active_persona)
-        
-        # If storage has a custom prompt, use it, otherwise get from synthesizer
-        system_prompt = content_data.get("system_prompt")
+        # Get prompt from synthesizer if not already in content_data
         if not system_prompt:
+            rag_agent = get_rag_agent(agent_id, base_company_info=business_context, persona_type=active_persona)
             system_prompt = rag_agent.synthesizer.get_persona_prompt(active_persona)
         
         return {

@@ -100,6 +100,37 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
     }
   }, [agent?.crewaiSettings?.intentConfidence]);
 
+  // Load messages from localStorage on mount or when agentId changes
+  useEffect(() => {
+    if (agentId) {
+      const savedMessages = localStorage.getItem(`chat_history_${agentId}`);
+      if (savedMessages) {
+        try {
+          setMessages(JSON.parse(savedMessages));
+        } catch (e) {
+          console.error('Error parsing saved messages:', e);
+        }
+      } else {
+        // Default greeting if no history
+        setMessages([
+          {
+            id: '1',
+            role: 'assistant',
+            content: 'Hello! How can I help you today?',
+            confidence: 100,
+          },
+        ]);
+      }
+    }
+  }, [agentId]);
+
+  // Save messages to localStorage whenever they change
+  useEffect(() => {
+    if (agentId && messages.length > 0) {
+      localStorage.setItem(`chat_history_${agentId}`, JSON.stringify(messages));
+    }
+  }, [messages, agentId]);
+
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {
     if (shouldAutoScroll && messagesContainerRef.current) {
@@ -284,6 +315,9 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
   };
 
   const handleClear = () => {
+    if (agentId) {
+      localStorage.removeItem(`chat_history_${agentId}`);
+    }
     setMessages([
       {
         id: '1',
@@ -305,7 +339,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
           <>
             {/* Persona Selection */}
             <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">Instructions Persona</label>
+              <label className="block text-sm font-medium mb-2">Instructions</label>
               <Select value={selectedPersona} onValueChange={setSelectedPersona}>
                 <SelectTrigger>
                   <SelectValue />
@@ -355,7 +389,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
 
             {/* Instructions */}
             <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">System Instructions</label>
+              <label className="block text-sm font-medium mb-2">System Instructions(Prompt)</label>
               <Textarea
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}

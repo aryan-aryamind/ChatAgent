@@ -272,9 +272,6 @@ class RAGAgent:
         intent_info = self.classifier.classify(query, qa_pairs or [])
         logger.info(f"🎯 Intent: {intent_info['intent']} ({intent_info['confidence']:.2f})")
         
-        if intent_info['intent'] == 'greeting' and intent_info['confidence'] > 0.8:
-            return {'answer': "Hello! How can I assist you today?", 'intent': 'greeting', 'confidence': 95, 'sources': []}
-
         # 3. Retrieval (Increased Recall)
         if qa_pairs: self.index_faq(qa_pairs)
         faq_hits = self.search_faq(query, top_k=3, min_similarity=0.1)
@@ -289,7 +286,8 @@ class RAGAgent:
             chunks=final_chunks, 
             max_chars=max_context_length, 
             intent=intent_info['intent'],
-            persona_type=persona_type
+            persona_type=persona_type,
+            history=history
         )
         result['intent'] = intent_info['intent']
         return result
