@@ -1,0 +1,12 @@
+[
+  {
+    "chunk_id": "faq-0",
+    "text": "Question: What is MedTrust?\nAnswer: MedTrust is a healthcare talent platform.",
+    "question": "What is MedTrust?",
+    "answer": "MedTrust is a healthcare talent platform.",
+    "url": "Manual FAQ",
+    "title": "Manual Q&A",
+    "is_qa": true,
+    "chunk_index": 0
+  }
+]

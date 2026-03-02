@@ -181,42 +181,30 @@ class LLMAgent:
             
         return matched_answer
 
+    def chat(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.2,
+        max_tokens: int = 500
+    ) -> Optional[str]:
+        """
+        Generic chat completion method for modular agents.
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        return self._call_llm(messages, options={"temperature": temperature, "max_tokens": max_tokens})
+
     def generate_answer_from_content(
         self,
         user_query: str,
         context: str
     ) -> str:
         """
-        Generate an answer from scraped website content (RAG approach).
+        Legacy/Helper method for compatibility. 
+        Note: New agents should use .chat() directly with specialized prompts.
         """
-        # Strip system tags if they were manually injected by the caller
-        clean_context = context
-        if "<|begin_of_text|>" in context:
-            if "<|start_header_id|>user<|end_header_id|>" in context:
-                clean_context = context.split("<|start_header_id|>user<|end_header_id|>")[-1]
-                clean_context = clean_context.split("<|eot_id|>")[0].strip()
-
-        system_msg = (
-            "You are a professional assistant. Answer the user's question using the provided context and global knowledge.\n\n"
-            "🚫 CRITICAL INSTRUCTION:\n"
-            "1. If content is marked with [AUTHORITATIVE KNOWLEDGE] or [GLOBAL KNOWLEDGE], it is the TRUTH. Use it to answer identity questions.\n"
-            "2. Answer in 1–3 clear sentences. Keep it direct and professional.\n"
-            "3. If the answer is not in the context or global knowledge, say: 'I don't have information about that in my knowledge base.'\n"
-            "4. Avoid using external knowledge not related to the company's identity."
-        )
-
-        messages = [
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": f"CONTEXT:\n{clean_context}\n\nQUESTION: {user_query}\n\nGive a brief, direct answer (1–3 sentences):"}
-        ]
-
-        answer = self._call_llm(messages, options={"temperature": 0.2, "max_tokens": 200})
-        
-        if answer:
-            prefixes_to_remove = ["Answer:", "Based on the context:", "According to the website:", "ANSWER (based ONLY on context above):", "ANSWER:"]
-            for prefix in prefixes_to_remove:
-                if answer.startswith(prefix):
-                    answer = answer[len(prefix):].strip()
-            return answer
-            
-        return None
+        system_msg = "You are a professional assistant. Answer based on context."
+        return self.chat(system_msg, f"CONTEXT:\n{context}\n\nQUESTION: {user_query}")

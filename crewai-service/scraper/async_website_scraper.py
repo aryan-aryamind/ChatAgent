@@ -576,142 +576,30 @@ class AsyncWebsiteScraper:
     async def _scrape_page(self, url: str, depth: int) -> Optional[ScrapedPage]:
         """
         Scrape a single page asynchronously.
-        Returns ScrapedPage or None if failed.
+        Automatically falls back to Playwright if BeautifulSoup results are poor
+        on detected JS-heavy sites.
         """
-        async with self.semaphore:  # Control concurrency
+        async with self.semaphore:
             try:
                 # Add delay for politeness
                 if self.visited_urls:
                     await asyncio.sleep(self.options.delay)
                 
-                # Mark as visited immediately to avoid duplicates
+                # Mark as visited
                 self.visited_urls.add(url)
                 
-                # Fetch page with retry logic for 429s
-                max_retries = 3
-                retry_count = 0
-                response = None
-                
+                # Try BeautifulSoup first
+                bs_page = None
                 async with httpx.AsyncClient(**self.client_config) as client:
-                    while retry_count <= max_retries:
-                        response = await client.get(url)
-                        
-                        if response.status_code == 429:
-                            retry_count += 1
-                            if retry_count > max_retries:
-                                logger.error(f"❌ Max retries reached for {url} after 429s.")
-                                break
-                                
-                            # Respect Retry-After header if present
-                            retry_after = response.headers.get("Retry-After")
-                            if retry_after and retry_after.isdigit():
-                                wait_time = int(retry_after)
-                            else:
-                                # Exponential backoff: 5, 10, 20 seconds + jitter
-                                wait_time = (2 ** (retry_count - 1)) * 5 + random.uniform(0, 2)
-                                
-                            logger.warning(f"⚠️  Rate limited (429) for {url}. Retry {retry_count}/{max_retries}. Waiting {wait_time:.1f}s...")
-                            await asyncio.sleep(wait_time)
-                            continue
-                        
-                        # Not a 429, break the loop
-                        break
-                        
-                    if not response:
-                        return None
-                        
+                    response = await client.get(url)
                     response.raise_for_status()
                     
-                    # Get HTML text - httpx handles decompression (gzip, deflate) automatically
-                    # and uses detected encoding from headers or content
                     html_text = response.text
-                    html_content = response.content
-                    html_size = len(html_content)
-                    logger.debug(f"📄 Parsed HTML for {url}: {html_size} bytes")
-                    
-                    # Try to detect encoding for better accuracy if needed
-                    # but only as a fallback or for logging
-                    encoding = response.encoding or 'utf-8'
-                    logger.debug(f"   - Response encoding: {encoding}")
-                    
-                    # Parse HTML - try multiple parsers with fallback
-                    soup = None
-                    parsers = ['lxml', 'html.parser', 'html5lib']
-                    
-                    for parser_name in parsers:
-                        try:
-                            soup = BeautifulSoup(html_text, parser_name)
-                            # Verify parsing worked and found elements
-                            if soup and len(soup.find_all()) > 0:
-                                logger.debug(f"   - Successfully parsed with {parser_name}")
-                                break
-                            elif soup:
-                                logger.debug(f"   - {parser_name} parsed but found 0 elements, trying next parser")
-                                soup = None
-                        except Exception as e:
-                            logger.debug(f"   - {parser_name} parser failed: {e}")
-                            soup = None
-                            continue
-                    
-                    # If all parsers failed, try parsing raw bytes
-                    if not soup or len(soup.find_all()) == 0:
-                        logger.warning(f"   - All text parsers failed, trying raw bytes with html.parser")
-                        try:
-                            soup = BeautifulSoup(html_content, 'html.parser')
-                        except Exception as e:
-                            logger.error(f"   - Raw bytes parsing also failed: {e}")
-                    
-                    # Verify parsing worked
-                    if not soup:
-                        raise ValueError("Failed to parse HTML - all parsers failed")
-                    
-                    # Debug: check if we can find basic elements
-                    body_found = soup.find('body') is not None
-                    html_found = soup.find('html') is not None
-                    total_elements = len(soup.find_all())
-                    logger.debug(f"   - Soup has body: {body_found}, html: {html_found}, total elements: {total_elements}")
-                    
-                    # If still no elements found, check if it's a JS-heavy site
-                    if total_elements == 0:
-                        html_preview = html_text[:500] if 'html_text' in locals() else str(html_content[:500])
-                        logger.error(f"   - No elements found! HTML preview: {html_preview}")
-                        
-                        # Detect JavaScript-heavy sites
-                        js_indicators = [
-                            'root', 'app', '__next__', 'react-root', 'vue-app',
-                            'ng-app', 'data-reactroot', 'id="root"', 'id="app"'
-                        ]
-                        html_lower = html_preview.lower()
-                        is_js_heavy = any(indicator in html_lower for indicator in js_indicators)
-                        
-                        if is_js_heavy or html_size > 10000:
-                            logger.warning(f"   - ⚠️  This appears to be a JavaScript-heavy site (React/Vue/Next.js). "
-                                         f"BeautifulSoup cannot extract content from JS-rendered pages. "
-                                         f"Consider using PlaywrightScraper or HybridScraper for this URL.")
-                        
-                        # Try one more time with html.parser on raw text
-                        try:
-                            soup = BeautifulSoup(html_text, 'html.parser')
-                            total_elements = len(soup.find_all())
-                            logger.debug(f"   - Retry with html.parser: {total_elements} elements")
-                        except Exception as e:
-                            logger.error(f"   - Final retry failed: {e}")
-                    
-                    # Extract content
+                    soup = BeautifulSoup(html_text, 'lxml')
                     extracted = self._extract_content(soup, url)
                     
-                    # Log extraction results
-                    content_length = len(extracted.get('main_content', ''))
-                    logger.debug(f"📝 Extracted content: {content_length} chars, {len(extracted.get('headings', []))} headings, {len(extracted.get('paragraphs', []))} paragraphs")
-                    
-                    # Extract links
-                    links = self._extract_links(soup, url)
-                    
-                    # Log link extraction
-                    logger.debug(f"🔗 Extracted {len(links)} links from {url}")
-                    
-                    # Create ScrapedPage
-                    page = ScrapedPage(
+                    # Create temporary ScrapedPage to evaluate quality
+                    bs_page = ScrapedPage(
                         url=url,
                         title=extracted['title'],
                         meta_description=extracted['meta_description'],
@@ -719,26 +607,41 @@ class AsyncWebsiteScraper:
                         paragraphs=extracted['paragraphs'],
                         images=extracted['images'],
                         main_content=extracted['main_content'],
-                        links=links,
+                        links=self._extract_links(soup, url),
                         timestamp=datetime.now().isoformat(),
                         depth=depth
                     )
+
+                # Detection: triggers Playwright for JS-heavy sites or empty content
+                js_indicators = ["loading...", "select role", "searching...", "react-root", "nextjs", "__next"]
+                content_lower = bs_page.main_content.lower()
+                is_js_heavy = any(ind in content_lower for ind in js_indicators)
+                is_low_content = len(bs_page.main_content.strip()) < 500
+                
+                # If quality is low and looks like JS site, try Playwright
+                if (is_js_heavy or is_low_content) and depth <= 1: # Only for shallow pages for speed
+                    try:
+                        from .playwright_scraper import PlaywrightScraper
+                        pw = PlaywrightScraper(timeout=45, page_timeout=45000)
+                        if pw.is_available():
+                            logger.info(f"🎭 [Playwright Fallback] Rendering JS for: {url}")
+                            pw_page = await pw.scrape(url)
+                            if pw_page and len(pw_page.main_content) > len(bs_page.main_content):
+                                # Use Playwright's depth and metadata
+                                pw_page.depth = depth
+                                await pw.close()
+                                return pw_page
+                            await pw.close()
+                    except (ImportError, Exception) as e:
+                        logger.debug(f"Playwright fallback failed for {url}: {e}")
+
+                return bs_page
                     
-                    # Log before adding to list (so count is accurate)
-                    page_num = len(self.scraped_pages) + 1
-                    content_len = len(page.main_content) if page.main_content else 0
-                    links_count = len(page.links) if page.links else 0
-                    logger.info(f"✅ Scraped [{page_num}/{self.options.max_pages}]: {url[:80]}... (depth: {depth}, {content_len} chars, {links_count} links)")
-                    
-                    # Log if content seems low
-                    if content_len < 100:
-                        logger.warning(f"⚠️  Low content on {url}: only {content_len} characters")
-                        # Try to debug why
-                        if content_len == 0:
-                            html_size = len(response.content) if 'response' in locals() else 0
-                            logger.error(f"❌ Zero content extracted! HTML size: {html_size} bytes, Title: {page.title}, Headings: {len(page.headings)}, Paragraphs: {len(page.paragraphs)}")
-                    
-                    return page
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"❌ Error scraping {url}: {error_msg}")
+                self.errors.append({"url": url, "error": error_msg})
+                return None
                     
             except httpx.HTTPStatusError as e:
                 # httpx.Response uses reason_phrase, not status_text
@@ -844,16 +747,12 @@ class AsyncWebsiteScraper:
                 logger.error(f"Error in crawl worker: {e}", exc_info=True)
                 self.queue.task_done()
     
-    async def run(self) -> ScrapedContent:
+    async def run(self, initial_page: Optional[ScrapedPage] = None) -> ScrapedContent:
         """
         Start the asynchronous crawl.
-        Returns ScrapedContent with all scraped pages.
+        If initial_page is provided, it uses its links to seed the crawl.
         """
         logger.info(f"🚀 Starting async crawl: {self.base_url}")
-        logger.info(f"   Max pages: {self.options.max_pages}, Max depth: {self.options.max_depth}, Concurrency: {self.options.concurrency}")
-        
-        # Load robots.txt
-        await self._load_robots_txt()
         
         # Reset state
         self.visited_urls.clear()
@@ -861,8 +760,18 @@ class AsyncWebsiteScraper:
         self.errors.clear()
         self.queue = asyncio.Queue()
         
-        # Add starting URL to queue
-        await self.queue.put((self.base_url, 0))
+        if initial_page:
+            logger.info(f"📍 Using provided initial page for link discovery: {initial_page.url}")
+            self.scraped_pages.append(initial_page)
+            self.visited_urls.add(initial_page.url)
+            
+            # Add links from initial page to queue
+            for link in initial_page.links:
+                if self._should_follow_link(link):
+                    await self.queue.put((link, 1))
+        else:
+            # Add starting URL to queue
+            await self.queue.put((self.base_url, 0))
         
         # Start worker tasks
         workers = [

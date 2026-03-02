@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, RotateCcw, Bot, User, FileText, Sparkles, Brain, Zap, Database, Target } from 'lucide-react';
+import { Send, RotateCcw, Bot, User, FileText, Sparkles, Brain, Zap, Database, Target, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
@@ -46,15 +46,52 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [model, setModel] = useState('gpt-4o-mini');
+  const [selectedPersona, setSelectedPersona] = useState(agent?.useCase || 'general');
   const [temperature, setTemperature] = useState([0.7]);
   const [maxTokens, setMaxTokens] = useState([1000]);
   const [instructions, setInstructions] = useState(
-    'You are a friendly customer support agent. Be helpful, professional, and concise. Always prioritize customer satisfaction.'
+    agent?.systemPrompt || 'You are a friendly customer support agent. Be helpful, professional, and concise. Always prioritize customer satisfaction.'
   );
+  const [isFetchingSettings, setIsFetchingSettings] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [intentConfidence, setIntentConfidence] = useState<number[]>([
     agent?.crewaiSettings?.intentConfidence || 0.8
   ]);
+
+  // Fetch settings from backend if agentId is available
+  useEffect(() => {
+    if (!agentId) return;
+
+    const fetchSettings = async () => {
+      setIsFetchingSettings(true);
+      try {
+        const response = await fetch(`/api/agents/persona?agent_id=${agentId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.system_prompt) {
+            setInstructions(data.system_prompt);
+            setInstructions(data.system_prompt);
+            if (data.persona_type) {
+              setSelectedPersona(data.persona_type);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching agent settings:', error);
+      } finally {
+        setIsFetchingSettings(false);
+      }
+    };
+
+    fetchSettings();
+  }, [agentId]);
+
+  // Use second useEffect to keep instructions synced with agent prop if it changes
+  useEffect(() => {
+    if (agent?.systemPrompt) {
+      setInstructions(agent.systemPrompt);
+    }
+  }, [agent?.systemPrompt]);
 
   // Update intent confidence when agent changes
   useEffect(() => {
@@ -95,6 +132,66 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
       });
     }
   };
+
+  const handleSaveSettings = async () => {
+    if (!agentId) return;
+    setIsSaving(true);
+    try {
+      const response = await fetch('/api/agents/update-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          agent_id: agentId,
+          persona_type: selectedPersona,
+          system_prompt: instructions
+        }),
+      });
+
+      if (response.ok) {
+        updateAgent(agentId, {
+          systemPrompt: instructions,
+          useCase: selectedPersona
+        });
+        import('sonner').then(({ toast }) => toast.success('Agent settings saved successfully'));
+      } else {
+        throw new Error('Failed to save settings');
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      import('sonner').then(({ toast }) => toast.error('Failed to save agent settings'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Fetch persona template when persona changes (mimic Step 4 behavior)
+  useEffect(() => {
+    // Skip on initial load if we already have agent instructions
+    // but allow fetching if the user explicitly changes the persona
+    const fetchTemplate = async () => {
+      setIsFetchingSettings(true)
+      try {
+        const agentIdParam = agentId ? `&agent_id=${agentId}` : ''
+        const response = await fetch(`/api/agents/persona?type=${selectedPersona}${agentIdParam}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.system_prompt) {
+            setInstructions(data.system_prompt)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching persona template:', error)
+      } finally {
+        setIsFetchingSettings(false)
+      }
+    }
+
+    // Only if it's not the initial mount and the persona actually changed
+    // In a real app we might want a ref to check mount state
+    fetchTemplate()
+  }, [selectedPersona])
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -206,19 +303,17 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
         {/* LLM Mode Settings */}
         {responseMode === 'llm' && (
           <>
-            {/* Model Selection */}
+            {/* Persona Selection */}
             <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">AI Model</label>
-              <Select value={model} onValueChange={setModel}>
+              <label className="block text-sm font-medium mb-2">Instructions Persona</label>
+              <Select value={selectedPersona} onValueChange={setSelectedPersona}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gpt-4o">GPT-4o (Most capable)</SelectItem>
-                  <SelectItem value="gpt-4o-mini">GPT-4o Mini (Fast)</SelectItem>
-                  <SelectItem value="claude-sonnet">Claude Sonnet 4.5</SelectItem>
-                  <SelectItem value="claude-opus">Claude Opus 4.5</SelectItem>
-                  <SelectItem value="gemini-pro">Gemini Pro</SelectItem>
+                  <SelectItem value="general">General (Balanced)</SelectItem>
+                  <SelectItem value="support">Customer Support (Empathetic)</SelectItem>
+                  <SelectItem value="sales">Sales (Goal-Oriented)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -380,7 +475,18 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
           </div>
         )}
 
-        <GradientButton className="w-full mt-6">Save Changes</GradientButton>
+        <GradientButton
+          className="w-full mt-6"
+          onClick={handleSaveSettings}
+          disabled={isSaving || isFetchingSettings}
+        >
+          {isSaving ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Saving...
+            </>
+          ) : 'Save Changes'}
+        </GradientButton>
       </div>
 
       {/* Right panel - Chat Interface */}

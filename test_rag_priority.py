@@ -27,8 +27,8 @@ def test_priority():
     # We'll mock the 'search' method to return the scraped chunk with high similarity
     # and verify if the manual Q&A (which will be found via qa_matcher) wins.
     
-    original_search = agent.search
-    agent.search = lambda q, top_k, min_similarity: [{
+    original_search = agent.search_docs
+    agent.search_docs = lambda q, top_k, min_similarity: [{
         'text': "Job listings at MedTrust include Nurses, Doctors, and Technicians at Apollo Hospital.",
         'url': "https://medtrust.com/jobs",
         'title': "Jobs",
@@ -44,9 +44,9 @@ def test_priority():
     print(f"Source: {result['sources'][0]['url'] if result['sources'] else 'None'}")
     
     if "healthcare talent platform" in result['answer'] and "Based on our content" not in result['answer']:
-        print("✅ SUCCESS: Manual Q&A prioritized correctly.")
+        print("SUCCESS: Manual Q&A prioritized correctly.")
     else:
-        print("❌ FAILURE: Manual Q&A not prioritized or has prefix.")
+        print("FAILURE: Manual Q&A not prioritized or has prefix.")
 
 if __name__ == "__main__":
     test_priority()

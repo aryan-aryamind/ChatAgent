@@ -1,8 +1,18 @@
+import sys
+import io
+
+# Fix for Windows terminal emoji encoding
+if sys.platform == "win32":
+    # Set default encoding to UTF-8
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uvicorn
+import logging
 from agents.intent_classifier import IntentClassifierAgent
 from agents.qa_matcher import QAMatcherAgent
 from agents.response_generator import ResponseGeneratorAgent
@@ -11,6 +21,7 @@ from agents.content_retriever import ContentRetrieverAgent
 from scraper import WebsiteScraper, AsyncWebsiteScraper, ScrapeOptions, AsyncScrapeOptions
 from content_storage import ContentStorage
 from rag_agent import RAGAgent
+from agents.synthesis_agent import SynthesisAgent
 import os
 from dotenv import load_dotenv
 import random
@@ -60,6 +71,11 @@ class ChatResponse(BaseModel):
     confidence: int
     matched_qa_pair: Optional[dict] = None
 
+class UpdateSettingsRequest(BaseModel):
+    agent_id: str
+    persona_type: str
+    system_prompt: Optional[str] = None
+
 class ScrapeRequest(BaseModel):
     url: str
     agent_id: Optional[str] = None  # Agent ID to store content
@@ -68,6 +84,7 @@ class ScrapeRequest(BaseModel):
     follow_external: Optional[bool] = False
     respect_robots: Optional[bool] = True
     delay: Optional[float] = 0.5
+    persona_type: Optional[str] = "general"
 
 class ScrapeResponse(BaseModel):
     success: bool
@@ -79,6 +96,7 @@ class ContentChatRequest(BaseModel):
     confidence_threshold: float = 0.3
     qa_pairs: Optional[List[QAPair]] = None
     history: Optional[List[Dict[str, str]]] = None
+    persona_type: Optional[str] = "general"
 
 class ContentChatResponse(BaseModel):
     text: str
@@ -122,15 +140,20 @@ content_storage = ContentStorage()
 # RAG Agent Registry (Cache to avoid re-init)
 rag_agent_registry = {}
 
-def get_rag_agent(agent_id: str, base_company_info: str = "") -> RAGAgent:
+def get_rag_agent(agent_id: str, base_company_info: str = "", persona_type: str = "general") -> RAGAgent:
     """Get or create a RAG agent instance from cache"""
     if agent_id not in rag_agent_registry:
-        print(f"🆕 Initializing new RAG Agent for: {agent_id}")
+        print(f"🆕 Initializing new RAG Agent for: {agent_id} (Persona: {persona_type})")
         rag_agent_registry[agent_id] = RAGAgent(
             agent_id=agent_id, 
             llm_agent=llm_agent, 
-            base_company_info=base_company_info
+            base_company_info=base_company_info,
+            persona_type=persona_type
         )
+    else:
+        # Update existing agent's persona if it changed
+        rag_agent_registry[agent_id].set_persona(persona_type)
+        
     return rag_agent_registry[agent_id]
 
 # Confidence thresholds
@@ -473,13 +496,19 @@ async def chat_with_content(request: ContentChatRequest):
         if request.qa_pairs:
             qa_pairs_dict = [qa.model_dump() for qa in request.qa_pairs]
 
-        # Get company info from stored content if possible
+        # Get company info and persona from stored content if possible
         content_data = content_storage.load_content(request.agent_id)
-        base_url = content_data.get("base_url", "") if content_data else ""
-        base_company_info = f"This is an AI support assistant for {base_url}" if base_url else "This is an AI support assistant."
+        business_context = content_data.get("business_context", "") if content_data else ""
+        
+        if not business_context and content_data:
+            base_url = content_data.get("base_url", "")
+            business_context = f"This is an AI support assistant for {base_url}" if base_url else "This is an AI support assistant."
+        
+        # Determine persona: Request override > Stored metadata > Default
+        persona_type = request.persona_type or (content_data.get("persona_type", "general") if content_data else "general")
         
         # Use registry to avoid memory leaks from re-initializing models
-        rag_agent = get_rag_agent(request.agent_id, base_company_info)
+        rag_agent = get_rag_agent(request.agent_id, business_context, persona_type)
         stats = rag_agent.get_stats()
         if not stats["vector_store"]["index_exists"]:
             content_data = content_storage.load_content(request.agent_id)
@@ -509,7 +538,8 @@ async def chat_with_content(request: ContentChatRequest):
                                 query=request.message,
                                 max_context_length=2000,
                                 qa_pairs=qa_pairs_dict,
-                                history=request.history
+                                history=request.history,
+                                persona_type=persona_type
                             )
                             return ContentChatResponse(
                                 text=result["answer"],
@@ -528,7 +558,8 @@ async def chat_with_content(request: ContentChatRequest):
             query=request.message,
             max_context_length=2000,
             qa_pairs=qa_pairs_dict,
-            history=request.history
+            history=request.history,
+            persona_type=persona_type
         )
 
         return ContentChatResponse(
@@ -592,6 +623,97 @@ async def rename_agent(request: RenameRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/persona-templates")
+async def get_all_persona_templates():
+    """List all available persona types."""
+    return list(SynthesisAgent.PERSONA_TEMPLATES.keys())
+
+
+@app.get("/persona-templates/{persona_type}")
+async def get_persona_template(persona_type: str):
+    """Get the professional prompt template for a specific persona type."""
+    if persona_type not in SynthesisAgent.PERSONA_TEMPLATES:
+        raise HTTPException(status_code=404, detail="Persona type not found")
+    
+    # We use a dummy SynthesisAgent to get the full formatted prompt structure
+    dummy_agent = SynthesisAgent(llm_agent=llm_agent, persona_type=persona_type)
+    system_prompt = dummy_agent.get_persona_prompt(persona_type)
+    
+    return {
+        "persona_type": persona_type,
+        "system_prompt": system_prompt
+    }
+
+
+@app.get("/get-agent-settings/{agent_id}")
+async def get_agent_settings(agent_id: str, persona_type: str = None):
+    """
+    Get agent's current settings including persona and synthesized system prompt.
+    """
+    try:
+        content_data = content_storage.load_content(agent_id)
+        if not content_data:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        
+        # Use provided persona_type override, or fallback to stored value
+        active_persona = persona_type or content_data.get("persona_type", "general")
+        business_context = content_data.get("business_context", "")
+        
+        if not business_context:
+            base_url = content_data.get("base_url", "")
+            business_context = f"This is an AI support assistant for {base_url}" if base_url else ""
+        
+        # Get prompt from synthesizer (ensure it has the right company info)
+        rag_agent = get_rag_agent(agent_id, base_company_info=business_context, persona_type=active_persona)
+        
+        # If storage has a custom prompt, use it, otherwise get from synthesizer
+        system_prompt = content_data.get("system_prompt")
+        if not system_prompt:
+            system_prompt = rag_agent.synthesizer.get_persona_prompt(active_persona)
+        
+        return {
+            "agent_id": agent_id,
+            "persona_type": active_persona,
+            "system_prompt": system_prompt
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/update-agent-settings")
+async def update_agent_settings(request: UpdateSettingsRequest):
+    """
+    Update agent's persona_type.
+    """
+    try:
+        content_data = content_storage.load_content(request.agent_id)
+        if not content_data:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        
+        content_data["persona_type"] = request.persona_type
+        if request.system_prompt:
+            content_data["system_prompt"] = request.system_prompt
+            
+        content_storage.save_content(request.agent_id, content_data)
+        
+        # Also update the registry if it exists
+        if request.agent_id in rag_agent_registry:
+            rag_agent = rag_agent_registry[request.agent_id]
+            rag_agent.set_persona(request.persona_type)
+        
+        # Invalidate registry cache to force re-init with new persona
+        if request.agent_id in rag_agent_registry:
+            del rag_agent_registry[request.agent_id]
+        
+        return {"success": True, "persona_type": request.persona_type}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 @app.post("/scrape", response_model=ScrapeResponse)
 async def scrape(request: ScrapeRequest):
@@ -620,95 +742,41 @@ async def scrape(request: ScrapeRequest):
         # Initialize scraper
         scraper = AsyncWebsiteScraper(base_url=url, options=scrape_options)
         
-        # Run scraping
-        print(f"🌐 Starting scrape for: {url}")
-        scraped_content = await scraper.run()
+        # 1. First, try a quick single-page check with Playwright for link discovery if it looks JS-heavy
+        # Or if we just want to be extra sure for the root page
+        initial_page = None
+        try:
+            from scraper.playwright_scraper import PlaywrightScraper
+            pw = PlaywrightScraper(timeout=45, page_timeout=45000, wait_until="networkidle")
+            if pw.is_available():
+                print(f"🎭 [Initial Discovery] Using Playwright for: {url}")
+                initial_page = await pw.scrape(url)
+                if initial_page:
+                    print(f"✅ Discovered {len(initial_page.links)} links with Playwright")
+                await pw.close()
+        except Exception as e:
+            print(f"⚠️  Playback discovery failed: {e}")
+
+        # 2. Run the full crawl (using initial_page for better links if found)
+        print(f"🌐 Starting crawl for: {url}")
+        scraped_content = await scraper.run(initial_page=initial_page)
         
-        # Check if scraping failed or extracted no content
-        combined_content = ""
+        # Combine content and headings
+        all_content = []
         all_headings = []
+        for page in scraped_content.pages:
+            if page.main_content:
+                all_content.append(page.main_content)
+            for heading in page.headings:
+                if isinstance(heading, dict) and heading.get("text"):
+                    all_headings.append({
+                        "level": heading.get("level", "h1"),
+                        "text": heading.get("text", ""),
+                        "id": heading.get("id", "")
+                    })
         
-        if scraped_content and scraped_content.pages:
-            # Combine all page content
-            all_content = []
-            
-            for page in scraped_content.pages:
-                if page.main_content:
-                    all_content.append(page.main_content)
-                
-                # Collect headings
-                for heading in page.headings:
-                    if isinstance(heading, dict) and heading.get("text"):
-                        all_headings.append({
-                            "level": heading.get("level", "h1"),
-                            "text": heading.get("text", ""),
-                            "id": heading.get("id", "")
-                        })
-            
-            combined_content = "\n\n".join(all_content)
-            
-            # Fallback: if no content extracted, try to get from first page
-            if not combined_content.strip():
-                first_page = scraped_content.pages[0]
-                combined_content = first_page.main_content or ""
-        
-        # If content extracted is very low or BeautifulSoup failed, try Playwright fallback
-        if not combined_content.strip() or len(combined_content.strip()) < 1000 or (scraped_content and scraped_content.total_characters < 1000):
-            print(f"⚠️  BeautifulSoup extracted low content ({len(combined_content)} chars). Trying Playwright fallback...")
-            try:
-                from scraper.playwright_scraper import PlaywrightScraper
-                playwright_scraper = PlaywrightScraper(timeout=90, page_timeout=90000, wait_until="domcontentloaded")
-                
-                if playwright_scraper.is_available():
-                    print(f"🎭 Using Playwright to scrape: {url}")
-                    playwright_page = await playwright_scraper.scrape(url)
-                    
-                    if playwright_page and playwright_page.main_content:
-                        print(f"✅ Playwright extracted {len(playwright_page.main_content)} characters")
-                        
-                        # Use Playwright content
-                        combined_content = playwright_page.main_content
-                        
-                        # Update headings
-                        for heading in playwright_page.headings:
-                            if isinstance(heading, dict) and heading.get("text"):
-                                all_headings.append({
-                                    "level": heading.get("level", "h1"),
-                                    "text": heading.get("text", ""),
-                                    "id": heading.get("id", "")
-                                })
-                        
-                        # Create a ScrapedContent-like object with Playwright results
-                        if not scraped_content or not scraped_content.pages:
-                            from scraper.async_website_scraper import ScrapedContent
-                            scraped_content = ScrapedContent(
-                                base_url=url,
-                                pages=[playwright_page],
-                                total_pages=1,
-                                total_characters=len(combined_content),
-                                timestamp=datetime.now().isoformat(),
-                                errors=[]
-                            )
-                        else:
-                            # Replace first page with Playwright content
-                            scraped_content.pages[0] = playwright_page
-                            scraped_content.total_characters = len(combined_content)
-                        
-                        await playwright_scraper.close()
-                    else:
-                        print(f"⚠️  Playwright also failed to extract content")
-                else:
-                    print(f"⚠️  Playwright is not available. Install with: pip install playwright && playwright install")
-            except Exception as e:
-                print(f"⚠️  Playwright fallback failed: {e}")
-                import traceback
-                print(traceback.format_exc())
-        
-        if not scraped_content or not scraped_content.pages:
-            raise HTTPException(
-                status_code=500,
-                detail="Scraping failed: No pages were scraped. The website may require JavaScript rendering (React/Next.js). Install Playwright for JS-heavy sites: pip install playwright && playwright install"
-            )
+        combined_content = "\n\n".join(all_content)
+
         
         # Prepare response data
         response_data = {
@@ -740,9 +808,20 @@ async def scrape(request: ScrapeRequest):
                 "total_characters": len(combined_content),
                 "pages_scraped": len(scraped_content.pages),
                 "errors_count": len(scraped_content.errors),
-            }
+            },
+            "persona_type": request.persona_type or "general"
         }
         
+        # 🧪 Extract dynamic Business Context from content
+        try:
+            temp_synthesizer = SynthesisAgent(llm_agent=llm_agent)
+            extracted_context = temp_synthesizer.extract_business_context(combined_content)
+            response_data["business_context"] = extracted_context
+            print(f"🏢 Extracted Business Context: {extracted_context}")
+        except Exception as e:
+            print(f"⚠️  Failed to extract business context: {e}")
+            response_data["business_context"] = f"AI Assistant for {url}"
+
         # Save content if agent_id is provided
         if request.agent_id:
             try:

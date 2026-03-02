@@ -1,68 +1,68 @@
-# Production RAG-First Architecture
+# Production Modular Agent Architecture
 
-This document defines the production-grade **RAG-First** architecture for the MedTrust Chatbot, focusing on accuracy, semantic understanding, and grounding.
+This document defines the modular **RAG-First** architecture for the MedTrust Chatbot, designed for scalability and high-fidelity grounding.
 
 ## 🏗️ System Overview
 
-The system uses a **Dual-Index** approach to separate manual knowledge (FAQs) from scraped documents, ensuring high-confidence answers for common questions.
+The system transitions from a monolithic RAG flow to a **Coordinator Pattern**, where specialized logic handles classification, retrieval, and synthesis.
 
 ```mermaid
 graph TD
-    User((User)) <--> NextJS["Next.js Component"]
+    User((User)) <--> NextJS["Next.js UI"]
     
-    subgraph "Next.js API Layer"
-        NextJS <--> ChatAPI["/api/agents/[id]/chat.ts"]
+    subgraph "Next.js API"
+        NextJS <--> ChatAPI["/api/agents/[id]/chat"]
     end
     
-    subgraph "Python RAG Service (Production)"
-        ChatAPI <--> CrewService["FastAPI (Port 8000)"]
-        CrewService <--> RAGAgent["RAG Agent"]
+    subgraph "Modular Python Service"
+        ChatAPI <--> RAGCoordinator["RAG Coordinator<br/>(Main orchestration)"]
         
-        RAGAgent --> JunkFilter["Junk Data Filter<br/>(Corruption Detection)"]
-        JunkFilter --> QueryRewrite["Query Rewriter<br/>(Normalizer)"]
-        QueryRewrite --> FAQSearch["FAQ Search<br/>(Semantic Match > 0.75)"]
+        RAGCoordinator --> Rewriter["Query Rewriter<br/>(Identity Grounding)"]
         
-        FAQSearch --> DocSearch["Document Search<br/>(FAISS Top 10)"]
-        DocSearch --> Rerank["BGE Reranker<br/>(Top 5)"]
+        Rewriter -- "Normal Query" --> Retrieval["Retrieval Engine<br/>(Dual-Index Search)"]
         
-        FAQSearch -- "Hits" --> Merge["Context Pool<br/>(Merged FAQ + Docs)"]
-        Rerank -- "Hits" --> Merge
+        Retrieval --> FAQSearch["FAQ Vector Search<br/>(Similarity > 0.75)"]
+        Retrieval --> DocSearch["Doc Vector Search<br/>(FAISS Top 10)"]
         
-        Merge --> LLM["Groq LLM<br/>(Hybrid Synthesis)"]
-        LLM --> Grounding["Dynamic Branding<br/>(Persona & Company Info)"]
-        Grounding --> ReturnSynth[Return Synthesized Answer]
+        DocSearch --> Rerank["BGE Reranker<br/>(Filtering noise)"]
+        
+        FAQSearch --> Synthesis["Synthesis Engine<br/>(Final grounding)"]
+        Rerank --> Synthesis
+        
+        Synthesis --> LLM["Groq / xAI / Ollama<br/>(Synthesis & Persona)"]
+        LLM --> FinalAnswer["Final Synthesized Answer"]
+        Synthesis -- "LLM Refusal" --> Fallback["Identity Fallback<br/>(Direct Answer)"]
     end
 ```
 
 ---
 
-## 🔄 Production Request Flow
+## 🔄 Execution Flow
 
-### 1. Query Normalization
-- User queries are rewritten to improve semantic hit rates (e.g., adding context words for locations).
+### 1. Query Normalization & Rewriting
+- Every query is processed to determine identity context and handle multi-turn history.
+- **Identity Grounding** ensures "Who are you?" is interpreted correctly for the specific company (e.g., MedTrust).
 
-### 2. FAQ Semantic Priority (Step 2)
-- **Search**: Scans the specific `faq` vector index.
-- **Goal**: Provides immediate, high-fidelity answers for manual Q&A pairs.
-- **Threshold**: **> 75% similarity**. If found, returns immediately.
+### 2. Dual-Index Retrieval
+- **High-Priority (FAQ)**: Manual Q&A pairs are searched with a strict threshold (>0.75). If a high-confidence match is found, it is prioritized.
+- **Discovery (Docs)**: Scraped documentation is searched as a fall-through or for broader context.
 
-### 3. Document RAG (Fall-through)
-- **Top 10 Retrieval**: Pulls the most relevant chunks from the scraped website index.
-- **Reranking**: Uses BGE Cross-Encoder to select the top 5 most relevant fragments.
-- **Synthesis**: Top 3 chunks are sent to Groq (Llama 3.3) with a strict context-bound prompt.
+### 3. Re-ranking
+- Uses `BAAI/bge-reranker-base` to ensure the most relevant fragments are prioritized for the LLM, reducing hallucination risk from noisy scraped data.
 
-### 4. Standardized Confidence (>0.45)
-- All retrieval is governed by a consistent similarity metric. 
-- Results below 45% are rejected to prevent hallucinations.
+### 4. Grounded Synthesis
+- The **Synthesis Engine** constructs a professional, persona-driven prompt.
+- Includes a **Grounded Fallback** mechanism: if the LLM refuses to answer or is offline, the system extracts a direct definition from the best retrieved chunk.
 
 ---
 
 ## 🛠️ Technology Stack
 
-- **Frontend**: Next.js (App Router), Tailwind CSS.
-- **AI Service**: Python, FastAPI.
-- **Vector Search**: FAISS (Dual-index: `docs` vs `faq`).
+- **Coordinator**: Python (FastAPI).
+- **LLM Providers**: 
+  - **Groq**: Llama-3.3-70b-versatile.
+  - **xAI**: Grok-3.
+  - **Ollama**: Local fallback (Llama-3).
 - **Embeddings**: BAAI/bge-base-en-v1.5.
-- **Re-ranking**: BAAI/bge-reranker-base.
-- **LLM Provider**: Groq (Llama-3.3-70b-versatile).
-- **Strategy**: Semantic-first, Zero-keyword fallback.
+- **Reranking**: BAAI/bge-reranker-base.
+- **Vector DB**: FAISS.

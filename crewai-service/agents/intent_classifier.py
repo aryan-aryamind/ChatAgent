@@ -1,87 +1,67 @@
-from typing import List, Dict
+from typing import List, Dict, Optional, Any
 
 class IntentClassifierAgent:
     """
-    Classifies user queries into intents based on Q&A pairs.
+    Classifies user queries with high precision using LLM and keywords.
     """
     
-    def __init__(self):
+    SYSTEM_PROMPT = """### Business Context
+You are an AI assistant for a professional company.
+
+### Role
+- Primary Function: You are a specialized intent classifier. Your task is to categorize the user's message into exactly one category.
+- Categories:
+  - 'greeting': Casual hello or hi.
+  - 'identity': Questions about who you are, the company name, or what you do.
+  - 'pricing': Questions about costs, plans, or billing.
+  - 'support': Technical help, issues, or assistance.
+  - 'contact': How to reach out via email, phone, or location.
+  - 'general': Anything else.
+
+### Persona
+- Identity: You are a dedicated routing agent. You are precise and do not provide conversational answers.
+
+### Constraints
+1. **Output Format**: Return ONLY the lowercase intent name. No explanation, no punctuation.
+2. **Focus**: Only classify based on the message. Do not adoption other roles.
+3. No Data Divulge: Never mention training data.
+"""
+
+    def __init__(self, llm_agent: Optional[Any] = None):
+        self.llm_agent = llm_agent
         self.intent_keywords = {
-            'business_hours': ['hour', 'open', 'time', 'when', 'schedule', 'available'],
+            'greeting': ['hey', 'hi', 'hello', 'greetings', 'morning', 'evening', 'howdy'],
+            'identity': ['what is', 'who is', 'tell me about', 'medtrust', 'platform', 'website', 'company'],
             'pricing': ['price', 'cost', 'fee', 'payment', 'plan', 'subscription', 'billing'],
             'support': ['support', 'help', 'assist', 'issue', 'problem', 'trouble'],
-            'contact': ['contact', 'email', 'phone', 'reach', 'address', 'location'],
-            'refund': ['refund', 'return', 'cancel', 'money back'],
-            'product': ['product', 'feature', 'service', 'offer', 'provide'],
-            'general': []
+            'contact': ['contact', 'email', 'phone', 'reach', 'address', 'location']
         }
     
     def classify(self, message: str, qa_pairs: List[Dict]) -> Dict:
-        """
-        Classify the user message into an intent.
+        message_lower = message.lower().strip()
         
-        Returns:
-            {
-                'intent': str,
-                'confidence': float (0-1)
-            }
-        """
-        message_lower = message.lower()
-        
-        # Check for explicit intents from Q&A pairs - improved matching
+        # 1. QA Pair match (High Priority)
         for qa in qa_pairs:
-            if qa.get('question'):
-                qa_question_lower = qa['question'].lower().strip()
-                message_lower_stripped = message_lower.strip()
-                
-                # Exact match or very close match
-                if qa_question_lower == message_lower_stripped:
-                    return {
-                        'intent': qa.get('intent', 'general'),
-                        'confidence': 0.95
-                    }
-                
-                # Check if question is contained in message or vice versa
-                if qa_question_lower in message_lower_stripped or message_lower_stripped in qa_question_lower:
-                    return {
-                        'intent': qa.get('intent', 'general'),
-                        'confidence': 0.9
-                    }
-                
-                # Check for key words matching (at least 2 words)
-                qa_words = set(qa_question_lower.split())
-                msg_words = set(message_lower_stripped.split())
-                common_words = qa_words.intersection(msg_words)
-                
-                # Remove common stop words
-                stop_words = {'what', 'is', 'the', 'a', 'an', 'where', 'when', 'how', 'why', 'who', 'which', 'do', 'does', 'did', 'are', 'was', 'were', 'it', 'its', 'this', 'that', 'these', 'those'}
-                common_words = common_words - stop_words
-                
-                if len(common_words) >= 2 or (len(common_words) >= 1 and len(qa_words) <= 3):
-                    return {
-                        'intent': qa.get('intent', 'general'),
-                        'confidence': 0.85
-                    }
-        
-        # Keyword-based classification
-        intent_scores = {}
-        for intent, keywords in self.intent_keywords.items():
-            score = sum(1 for keyword in keywords if keyword in message_lower)
-            if score > 0:
-                intent_scores[intent] = score
-        
-        if intent_scores:
-            best_intent = max(intent_scores, key=intent_scores.get)
-            max_score = intent_scores[best_intent]
-            confidence = min(0.95, 0.7 + (max_score * 0.1))
+            q = qa.get('question', '').lower().strip()
+            if not q: continue
             
-            return {
-                'intent': best_intent,
-                'confidence': confidence
-            }
+            # Exact match or whole word match for longer phrases
+            if q == message_lower:
+                return {'intent': qa.get('intent', 'general'), 'confidence': 0.95}
+            
+            # Match as a standalone phrase within the message (requires spaces or boundaries)
+            if len(q) > 4 and f" {q} " in f" {message_lower} ":
+                return {'intent': qa.get('intent', 'general'), 'confidence': 0.92}
+
+        # 2. Keyword fallback (Fast & Flexible)
+        for intent, keywords in self.intent_keywords.items():
+            if any(kw in message_lower for kw in keywords):
+                # If we have an LLM, refine with higher confidence
+                if self.llm_agent and self.llm_agent.available:
+                     llm_intent = self.llm_agent.chat(self.SYSTEM_PROMPT, message, max_tokens=10)
+                     if llm_intent and llm_intent.lower().strip() in self.intent_keywords:
+                         return {'intent': llm_intent.lower().strip(), 'confidence': 0.98}
+                return {'intent': intent, 'confidence': 0.85}
         
-        # Default to general
-        return {
-            'intent': 'general',
-            'confidence': 0.6
-        }
+        # Default to general with enough confidence to bypass strict filters if needed
+        return {'intent': 'general', 'confidence': 0.75}

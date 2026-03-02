@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Check, Sparkles, ArrowUp, Brain, Zap, ArrowLeft } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
@@ -22,11 +22,41 @@ export function AgentCreationStep4() {
   const { state, setSelectedModel, setResponseMode, reset, setStep } = useAgentCreation()
   const { addAgent } = useAgents()
   const [selectedModelId, setSelectedModelId] = useState('gpt-5.1')
+  const [selectedPersona, setSelectedPersona] = useState(state.details?.useCase || 'general')
   const [temperature, setTemperature] = useState([0])
   const [maxTokens, setMaxTokens] = useState([1000])
   const [systemPrompt, setSystemPrompt] = useState('')
+  const [isFetchingPrompt, setIsFetchingPrompt] = useState(false)
   const [intentConfidence, setIntentConfidence] = useState([0.8])
   const [isCreating, setIsCreating] = useState(false)
+
+  // Fetch persona template when persona changes or on initial load
+  useEffect(() => {
+    const fetchPersona = async () => {
+      setIsFetchingPrompt(true)
+      try {
+        const agentId = state.tempAgentId || state.agentId
+        let url = `/api/agents/persona?type=${selectedPersona}`
+        if (agentId) {
+          url += `&agent_id=${agentId}`
+        }
+
+        const response = await fetch(url)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.system_prompt) {
+            setSystemPrompt(data.system_prompt)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching persona:', error)
+      } finally {
+        setIsFetchingPrompt(false)
+      }
+    }
+
+    fetchPersona()
+  }, [selectedPersona, state.tempAgentId, state.agentId])
 
   const responseMode = state.responseMode || 'llm'
 
@@ -233,9 +263,9 @@ export function AgentCreationStep4() {
 
                 <div>
                   <Label className="mb-2 block">Instructions</Label>
-                  <Select defaultValue="general">
+                  <Select value={selectedPersona} onValueChange={setSelectedPersona}>
                     <SelectTrigger>
-                      <SelectValue>General AI agent</SelectValue>
+                      <SelectValue placeholder="Select persona" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="general">General AI agent</SelectItem>
@@ -281,13 +311,17 @@ export function AgentCreationStep4() {
                 </div>
 
                 <div>
-                  <Label className="mb-2 block">System Prompt</Label>
-                  <div className="bg-muted rounded-lg p-4 max-h-48 overflow-y-auto">
+                  <Label className="mb-2 block flex items-center justify-between">
+                    <span>System Prompt</span>
+                    {isFetchingPrompt && (
+                      <span className="text-[10px] animate-pulse text-primary font-medium">Fetching details...</span>
+                    )}
+                  </Label>
+                  <div className={`bg-muted rounded-lg p-4 max-h-48 overflow-y-auto transition-opacity ${isFetchingPrompt ? 'opacity-50' : 'opacity-100'}`}>
                     <textarea
-                      value={systemPrompt || (state.details?.name
-                        ? `### Business Context\n${state.details.name} is a company that provides services.`
-                        : '### Business Context\nYour agent instructions will appear here...')}
+                      value={systemPrompt}
                       onChange={(e) => setSystemPrompt(e.target.value)}
+                      placeholder="Your agent instructions will appear here based on your content..."
                       className="w-full bg-transparent text-sm resize-none outline-none"
                       rows={6}
                     />

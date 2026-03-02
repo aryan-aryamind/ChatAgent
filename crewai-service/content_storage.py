@@ -36,22 +36,30 @@ class ContentStorage:
             file_path = self._get_file_path(agent_id)
             
             # Prepare content structure
-            content_data = {
-                "agent_id": agent_id,
-                "base_url": scraped_content.get("url", ""),
-                "scraped_at": datetime.now().isoformat(),
-                "stats": scraped_content.get("stats", {}),
-                "pages": scraped_content.get("pages", []),
-                "full_content": scraped_content.get("content", ""),  # Combined content
-                "metadata": scraped_content.get("metadata", {}),
-                "headings": scraped_content.get("headings", [])
-            }
+            # Check if this is already a full content_data object (e.g. from an update)
+            if "full_content" in scraped_content:
+                content_data = scraped_content
+                content_data["agent_id"] = agent_id
+            else:
+                # This is raw content from a scrape
+                content_data = {
+                    "agent_id": agent_id,
+                    "base_url": scraped_content.get("url", ""),
+                    "scraped_at": datetime.now().isoformat(),
+                    "stats": scraped_content.get("stats", {}),
+                    "pages": scraped_content.get("pages", []),
+                    "full_content": scraped_content.get("content", ""),  # Combined content
+                    "metadata": scraped_content.get("metadata", {}),
+                    "headings": scraped_content.get("headings", []),
+                    "persona_type": scraped_content.get("persona_type", "general"),
+                    "business_context": scraped_content.get("business_context", "")
+                }
             
             # Save to JSON file
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(content_data, f, indent=2, ensure_ascii=False)
             
-            print(f"💾 Saved content for agent {agent_id}: {len(content_data['full_content'])} characters")
+            print(f"💾 Saved content for agent {agent_id}: {len(content_data.get('full_content', ''))} characters")
             return True
             
         except Exception as e:
