@@ -20,7 +20,7 @@ class SemanticChunker:
         self,
         chunk_size: int = 600,  # Roadmap: 400-700 tokens
         chunk_overlap: int = 100,  # Roadmap: 100 tokens
-        min_chunk_size: int = 50   # Minimum meaningful text
+        min_chunk_size: int = 15   # Minimum meaningful text (relaxed for contact info)
     ):
         """
         Initialize chunker with production-level defaults.

@@ -8,6 +8,8 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 // 2. Pass the agent's Q&A pairs and user message
 // 3. Receive intent, matched Q&A, and response
 
+import { prisma } from '@/lib/prisma'
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -24,11 +26,41 @@ export default async function handler(
   }
 
   try {
+    // Check agent status and expiration
+    const agent = await prisma.agent.findUnique({
+      where: { id: id as string },
+    })
+
+    if (!agent) {
+      // For backward compatibility or if database is not yet populated
+      console.warn(`[Chat] Agent ${id} not found in database. Proceeding with caution.`);
+    } else {
+      const agentData = agent as any;
+      if (agentData.status === 'disabled' || agentData.status === 'hidden') {
+        return res.status(403).json({
+          text: "This agent is currently unavailable.",
+          intent: 'agent_disabled',
+          confidence: 0,
+          sources: [],
+        })
+      }
+
+      if (agentData.expiresAt && new Date() > new Date(agentData.expiresAt)) {
+        return res.status(403).json({
+          text: "This agent's time period has ended. It is no longer active.",
+          intent: 'agent_expired',
+          confidence: 0,
+          sources: [],
+        })
+      }
+    }
+
     const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8000'
 
     // ALWAYS Try Python RAG service as the primary "Brain"
     try {
-      const { message, responseMode, qaPairs, intentConfidence, history } = req.body;
+      const { message, qaPairs, intentConfidence, history, system_prompt } = req.body;
+      const safeIntentConfidence = intentConfidence !== undefined ? (intentConfidence > 1 ? intentConfidence / 100 : intentConfidence) : 0.8;
 
       const ragResponse = await fetch(`${crewaiServiceUrl}/chat-content`, {
         method: 'POST',
@@ -37,9 +69,9 @@ export default async function handler(
           message: message,
           agent_id: id,
           qa_pairs: qaPairs || [],
-          // Roadmap: Standardize confidence logic (> 0.45)
-          confidence_threshold: Math.max(intentConfidence > 1 ? intentConfidence / 100 : intentConfidence, 0.45),
+          confidence_threshold: Math.max(safeIntentConfidence, 0.45),
           history: history || [],
+          system_prompt: system_prompt,
         }),
       })
 

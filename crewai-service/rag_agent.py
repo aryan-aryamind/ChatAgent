@@ -176,49 +176,55 @@ class RAGAgent:
         if junk_ratio > self.JUNK_NON_ASCII_THRESHOLD:
             return True
             
-        # Check for "word density" - if there are no spaces in a long string, it's likely binary noise
-        if " " not in text.strip() and len(text.strip()) > 50:
+        # Check for "word density" - if there are no spaces, newlines, or common separators in a long string, it's likely binary noise
+        cleaned_text = text.strip().replace("\n", " ").replace("\r", " ").replace("\t", " ")
+        if " " not in cleaned_text and len(cleaned_text) > 50:
             return True
             
         return False
 
     @staticmethod
-    def _extract_clean_answer_from_chunk(text: str, max_chars: int = 350) -> str:
+    def _extract_clean_answer_from_chunk(text: str, max_chars: int = 500) -> str:
         """
         Extract meaningful sentences from raw chunk text.
-        Prioritizes technical details over general definitions.
+        Prioritizes technical details, prices, and contact info.
         """
         if not text or len(text.strip()) < 15:
             return text.strip()[:max_chars] if text else ""
             
-        text = re.sub(r'\s+', ' ', text.strip())
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        sentences = [s.strip() for s in sentences if len(s.strip()) > 15]
+        # Normalize whitespace but keep some structure
+        text = re.sub(r'[\t\r]+', ' ', text.strip())
+        sentences = re.split(r'(?<=[.!?])\s+|\n', text)
+        sentences = [s.strip() for s in sentences if len(s.strip()) > 5]
         
-        # Focus on specs, features, and values rather than "is a product" definitions
+        # Focus on specs, features, and values
         feature_markers = (
-            r"\b(?:ghz|dpi|sensor|buttons|usb|wireless|battery|gaming|office|wired)\b",
+            r"\b(?:ghz|dpi|sensor|buttons|usb|wireless|battery|gaming|office|wired|adapter|charger|laptop|notebook)\b",
             r"\b(?:features|includes|specifications|compatible|compatible with)\b",
             r"\b(?:high-precision|ergonomic|durable|adjustable)\b",
+            r"(?:₹|rs\.|\bprice\b|\bcost\b|[\d,]+\.?\d*)", # Price markers
+            r"\b(?:email|phone|contact|address|support|headquarter|reach us|call us|location|hours|monday|friday)\b", # Contact markers
+            r"[\w\.-]+@[\w\.-]+\.\w+", # Email pattern
+            r"\+?\d{1,4}[-.\s]?\d{7,15}" # Phone pattern
         )
         
         chosen = []
         for s in sentences:
             if any(re.search(m, s, re.I) for m in feature_markers):
                 chosen.append(s)
-                if len(chosen) >= 3: # Keep up to 3 feature sentences
+                if len(chosen) >= 5: # Keep up to 5 relevant sentences for better context
                     break
         
         if not chosen:
-            chosen = sentences[:2]
+            chosen = sentences[:4]
             
-        result = ' '.join(chosen).strip()
+        result = '\n'.join(chosen).strip()
         if len(result) > max_chars:
             result = result[:max_chars].rsplit(' ', 1)[0].rstrip('.,;') + "..."
             
         return result
     
-    def index_content(self, pages: List[Dict[str, Any]], batch_size: int = 32) -> Dict[str, Any]:
+    def index_content(self, pages: List[Dict[str, Any]], batch_size: int = 256) -> Dict[str, Any]:
         """Index scraped pages into vector store."""
         logger.info(f"🔄 Indexing {len(pages)} pages for agent {self.agent_id}...")
         chunks = self.chunker.chunk_pages(pages)
@@ -258,7 +264,8 @@ class RAGAgent:
         qa_pairs: List[Dict[str, Any]] = None,
         max_context_length: int = 2500,
         min_similarity: float = 0.1,
-        persona_type: Optional[str] = None
+        persona_type: Optional[str] = None,
+        system_prompt: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Coordinated Answer Pipeline (Modular)
@@ -287,7 +294,8 @@ class RAGAgent:
             max_chars=max_context_length, 
             intent=intent_info['intent'],
             persona_type=persona_type,
-            history=history
+            history=history,
+            system_prompt=system_prompt
         )
         result['intent'] = intent_info['intent']
         return result
@@ -325,19 +333,24 @@ class RAGAgent:
                     boost = all_hits[i].get('_priority_boost', 0)
                     score = float(s) + boost
                     
-                    # Reranking Penalty for 'Combos' when user asks for a single item
-                    title = all_hits[i].get('title', '').lower()
-                    text = all_hits[i].get('text', '').lower()
-                    is_combo_page = any(w in title or w in text for w in ['combo', 'kit', 'set', 'collection', 'archives'])
+                    # URL-based Boost for core informational pages
+                    url = all_hits[i].get('url', '').lower().rstrip('/')
+                    if any(w in url for w in ['contact', 'about', 'support', 'headquarter', 'location', 'privacy', 'policy', 'terms']):
+                        score += 0.35 # Increased boost for primary info pages
                     
-                    # If query is specifically about 'mouse' or 'keyboard' but NOT 'combo'
-                    q_lower = query.lower()
-                    if is_combo_page and any(w in q_lower for w in ['mouse', 'keyboard']) and 'combo' not in q_lower:
-                        score -= 0.15 # Small penalty to favor standalone products
+                    # Reranking Penalty for 'Archives' or 'Category' pages when looking for specific info
+                    if any(w in url for w in ['category', 'archives', 'tag']):
+                        score -= 0.1
                         
                     all_hits[i]['rerank_score'] = score
                 
                 all_hits.sort(key=lambda x: x.get('rerank_score', -10), reverse=True)
+                
+                # Apply text cleaning to top hits to ensure factual priority
+                for hit in all_hits[:10]:
+                    if not hit.get('is_qa'): # Don't clean manual FAQs
+                        hit['text'] = self._extract_clean_answer_from_chunk(hit.get('text', ''))
+                
                 return all_hits[:10]
         
         # Fallback to simple merge if reranker is unavailable

@@ -27,7 +27,7 @@ class VectorStore:
         self,
         agent_id: str,
         storage_dir: str = "vector_storage",
-        model_name: str = "BAAI/bge-base-en-v1.5",
+        model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
         index_type: str = "docs" # New: support 'docs' or 'faq'
     ):
         """
@@ -122,7 +122,7 @@ class VectorStore:
     def add_chunks(
         self,
         chunks: List[Dict[str, Any]],
-        batch_size: int = 32
+        batch_size: int = 256
     ) -> int:
         """
         Add chunks to the vector store.

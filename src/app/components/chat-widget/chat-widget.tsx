@@ -150,7 +150,7 @@ export function ChatWidget() {
                           AI
                         </div>
                       )}
-                      
+
                       <div
                         className={cn(
                           'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm',
@@ -229,7 +229,7 @@ export function ChatWidget() {
                     </button>
                   </div>
                   <div className="text-xs text-text-muted text-center mt-2">
-                    Powered by Chatbase
+                    Powered by ChatbotAI
                   </div>
                 </div>
               </>

@@ -8,13 +8,16 @@ import { useAgentCreation } from '@/contexts/AgentCreationContext'
 
 export function AgentCreationStep1() {
   const router = useRouter()
-  const { setDetails, setStep, addSource, setAgentId } = useAgentCreation()
+  const { setDetails, setStep, addSource, setAgentId, clearSources } = useAgentCreation()
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [useCase, setUseCase] = useState('general')
   const [isLoading, setIsLoading] = useState(false)
 
   const handleContinue = async () => {
     if (!websiteUrl) return
+
+    // Clear any previous sources to avoid accumulation
+    clearSources()
 
     // Generate permanent agent ID immediately
     const permanentId = Date.now().toString()

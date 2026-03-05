@@ -11,7 +11,7 @@ import { Source, QAPair } from '@/contexts/AgentCreationContext'
 
 export function AgentCreationStep2() {
   const router = useRouter()
-  const { state, addSource, setStep } = useAgentCreation()
+  const { state, addSource, setStep, clearSources } = useAgentCreation()
   const [openDialogType, setOpenDialogType] = useState<Source['type'] | null>(null)
   const [dialogKey, setDialogKey] = useState(0) // Key to force dialog remount
   const [sourceUrl, setSourceUrl] = useState('')
@@ -70,15 +70,15 @@ export function AgentCreationStep2() {
     }
 
     addSource(qaSource)
-    
+
     // Close dialog FIRST - this is critical
     setOpenDialogType(null)
-    
+
     // Then reset form fields
     setQAPairs([])
     setCurrentQuestion('')
     setCurrentAnswer('')
-    
+
     // Force dialog to remount after a brief delay to ensure it closes
     setTimeout(() => {
       setDialogKey(prev => prev + 1)
@@ -102,11 +102,11 @@ export function AgentCreationStep2() {
     // Validate inputs
     const trimmedName = sourceName.trim()
     const trimmedUrl = sourceUrl.trim()
-    
+
     if (!trimmedName) {
       return
     }
-    
+
     if (sourceType === 'link' && !trimmedUrl) {
       return
     }
@@ -123,14 +123,14 @@ export function AgentCreationStep2() {
 
     // Add source to context
     addSource(newSource)
-    
+
     // Close dialog FIRST - this is critical
     setOpenDialogType(null)
-    
+
     // Then reset form fields
     setSourceUrl('')
     setSourceName('')
-    
+
     // Force dialog to remount after a brief delay to ensure it closes
     setTimeout(() => {
       setDialogKey(prev => prev + 1)
@@ -146,6 +146,7 @@ export function AgentCreationStep2() {
   }, [openDialogType])
 
   const handleBack = () => {
+    clearSources()
     setStep(1)
     router.push('/agents/new')
   }
@@ -201,9 +202,9 @@ export function AgentCreationStep2() {
                         <Check className="h-4 w-4 text-green-500 ml-2" />
                       )}
                     </div>
-                    <Dialog 
+                    <Dialog
                       key={`dialog-${source.type}-${dialogKey}`}
-                      open={openDialogType === source.type} 
+                      open={openDialogType === source.type}
                       onOpenChange={(open) => {
                         // Handle both manual and programmatic close
                         if (!open) {
@@ -384,11 +385,11 @@ export function AgentCreationStep2() {
                                 />
                               </div>
                             )}
-                            <Button 
-                              onClick={(e) => handleAddSource(source.type, e)} 
+                            <Button
+                              onClick={(e) => handleAddSource(source.type, e)}
                               className="w-full"
                               disabled={
-                                (source.type === 'link' && !sourceUrl.trim()) || 
+                                (source.type === 'link' && !sourceUrl.trim()) ||
                                 !sourceName.trim()
                               }
                               type="button"

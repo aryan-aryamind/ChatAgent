@@ -78,7 +78,7 @@ export function AgentBuilder({ agentId, onBack }: AgentBuilderProps) {
                 autoFocus
               />
             ) : (
-              <h1 
+              <h1
                 className="text-xl font-bold cursor-pointer hover:text-primary transition-colors"
                 onClick={() => setIsEditingName(true)}
                 title="Click to edit"
@@ -87,16 +87,14 @@ export function AgentBuilder({ agentId, onBack }: AgentBuilderProps) {
               </h1>
             )}
           </div>
-          
+
           <div className="flex items-center gap-3">
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
-              agentStatus === 'active' 
-                ? 'bg-success/10 text-success' 
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${agentStatus === 'active'
+                ? 'bg-success/10 text-success'
                 : 'bg-text-muted/10 text-text-muted'
-            }`}>
-              <div className={`w-2 h-2 rounded-full ${
-                agentStatus === 'active' ? 'bg-success' : 'bg-text-muted'
-              }`} />
+              }`}>
+              <div className={`w-2 h-2 rounded-full ${agentStatus === 'active' ? 'bg-success' : 'bg-text-muted'
+                }`} />
               {agentStatus === 'active' ? 'Active' : 'Disabled'}
             </div>
           </div>
@@ -120,35 +118,35 @@ export function AgentBuilder({ agentId, onBack }: AgentBuilderProps) {
 
           <div className="flex-1 overflow-y-auto scrollbar-hide">
             <TabsContent value="playground" className="m-0 h-full">
-              <PlaygroundTab 
+              <PlaygroundTab
                 agentId={agentId || undefined}
                 responseMode={agent?.responseMode || 'llm'}
                 agent={agent || undefined}
               />
             </TabsContent>
-            
+
             <TabsContent value="data-sources" className="m-0 h-full">
               <DataSourcesTab />
             </TabsContent>
-            
+
             <TabsContent value="actions" className="m-0 h-full">
               <ActionsTab />
             </TabsContent>
-            
+
             <TabsContent value="analytics" className="m-0 h-full">
               <AnalyticsTab />
             </TabsContent>
-            
+
             <TabsContent value="activity" className="m-0 h-full">
               <ActivityTab />
             </TabsContent>
-            
+
             <TabsContent value="deploy" className="m-0 h-full">
-              <DeployTab />
+              <DeployTab agentId={agentId || undefined} />
             </TabsContent>
-            
+
             <TabsContent value="settings" className="m-0 h-full">
-              <SettingsTab 
+              <SettingsTab
                 agentStatus={agentStatus}
                 onStatusChange={setAgentStatus}
                 agentId={agentId || undefined}

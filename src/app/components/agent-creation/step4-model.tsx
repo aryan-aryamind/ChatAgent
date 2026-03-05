@@ -8,6 +8,7 @@ import { Slider } from '@/app/components/ui/slider'
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group'
 import { useAgentCreation } from '@/contexts/AgentCreationContext'
 import { useAgents } from '@/contexts/AgentsContext'
+import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
 
 const availableModels = [
@@ -20,6 +21,7 @@ const availableModels = [
 export function AgentCreationStep4() {
   const router = useRouter()
   const { state, setSelectedModel, setResponseMode, reset, setStep } = useAgentCreation()
+  const { data: session } = useSession()
   const { addAgent } = useAgents()
   const [selectedModelId, setSelectedModelId] = useState('gpt-5.1')
   const [selectedPersona, setSelectedPersona] = useState(state.details?.useCase || 'general')
@@ -89,9 +91,6 @@ export function AgentCreationStep4() {
   const handleCreateAgent = async () => {
     setIsCreating(true)
 
-    // Simulate API call to create agent
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
     // Extract agent name from website URL or use default
     let agentName = 'Untitled Agent'
     if (state.details?.websiteUrl) {
@@ -109,34 +108,60 @@ export function AgentCreationStep4() {
       agentName = state.details.name
     }
 
-    // Create the agent object
-    const newAgent = {
-      id: state.agentId || Date.now().toString(),
-      name: agentName,
-      websiteUrl: state.details?.websiteUrl,
-      useCase: state.details?.useCase,
-      responseMode: responseMode,
-      model: responseMode === 'llm' ? selectedModelId : undefined,
-      temperature: responseMode === 'llm' ? temperature[0] : undefined,
-      maxTokens: responseMode === 'llm' ? maxTokens[0] : undefined,
-      systemPrompt: responseMode === 'llm' ? systemPrompt : undefined,
-      qaPairs: responseMode === 'crewai' ? allQAPairs : undefined,
-      crewaiSettings: responseMode === 'crewai' ? {
-        intentConfidence: intentConfidence[0],
-      } : undefined,
-      lastTrained: 'Just now',
-      status: 'active' as const,
-      conversations: 0,
-      sources: state.sources.length,
+    // Set expiration based on user plan
+    const expiresAt = (session?.user as any)?.plan === 'FREE'
+      ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      : null;
+
+    // Call real API to create agent in database
+    let createdAgent;
+    try {
+      const response = await fetch('/api/agents/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: agentName,
+          websiteUrl: state.details?.websiteUrl,
+          useCase: state.details?.useCase,
+          responseMode: responseMode,
+          model: responseMode === 'llm' ? selectedModelId : undefined,
+          temperature: responseMode === 'llm' ? temperature[0] : undefined,
+          maxTokens: responseMode === 'llm' ? maxTokens[0] : undefined,
+          systemPrompt: responseMode === 'llm' ? systemPrompt : undefined,
+          qaPairs: responseMode === 'crewai' ? allQAPairs : undefined,
+          crewaiSettings: responseMode === 'crewai' ? {
+            intentConfidence: intentConfidence[0],
+          } : undefined,
+          lastTrained: 'Just now',
+          status: 'active',
+          conversations: 0,
+          sources: state.sources.length,
+          expiresAt: expiresAt,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save agent to database');
+      }
+
+      createdAgent = await response.json();
+    } catch (error) {
+      console.error('Database sync error:', error);
+      toast.error('Failed to sync agent to database');
+      setIsCreating(false);
+      return;
     }
 
-    // Add agent to the list
-    addAgent(newAgent)
+    // Add agent to the local list (for backward compatibility/consistency)
+    addAgent({
+      ...createdAgent,
+      id: createdAgent.id, // Ensure we use the DB ID
+    })
 
     // Rename content/vector store if we have a temporary agent ID from scraping
     if (state.tempAgentId) {
       try {
-        console.log(`Renaming content from ${state.tempAgentId} to ${newAgent.id}`)
+        console.log(`Renaming content from ${state.tempAgentId} to ${createdAgent.id}`)
         toast.info('Finalizing agent knowledge base...')
 
         await fetch('/api/agents/rename', {
@@ -146,7 +171,7 @@ export function AgentCreationStep4() {
           },
           body: JSON.stringify({
             oldAgentId: state.tempAgentId,
-            newAgentId: newAgent.id,
+            newAgentId: createdAgent.id,
           }),
         })
         console.log('Agent content renamed successfully')

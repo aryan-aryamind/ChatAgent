@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, RotateCcw, Bot, User, FileText, Sparkles, Brain, Zap, Database, Target, Loader2 } from 'lucide-react';
+import { Send, RotateCcw, Bot, User, FileText, Sparkles, Brain, Zap, Database, Target, Loader2, ThumbsUp, ThumbsDown } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
@@ -19,6 +21,8 @@ interface Message {
   tokens?: number;
   responseTime?: number;
   intent?: string;
+  timestamp: number;
+  feedback?: 'like' | 'unlike';
   matchedQAPair?: {
     question: string;
     answer: string;
@@ -32,18 +36,47 @@ interface PlaygroundTabProps {
 }
 
 export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: PlaygroundTabProps) {
+  const formatTimeAgo = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return new Date(timestamp).toLocaleDateString();
+  };
+
+  const handleFeedback = (messageId: string, type: 'like' | 'unlike') => {
+    setMessages(prev => prev.map(m =>
+      m.id === messageId ? { ...m, feedback: m.feedback === type ? undefined : type } : m
+    ));
+  };
+
   const { updateAgent } = useAgents();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      role: 'assistant',
-      content: 'Hello! How can I help you today?',
-      confidence: 100,
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (typeof window !== 'undefined' && agentId) {
+      const saved = localStorage.getItem(`chat_history_${agentId}`);
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error('Error parsing saved messages:', e);
+        }
+      }
+    }
+    return [
+      {
+        id: '1',
+        role: 'assistant',
+        content: 'Hello! How can I help you today?',
+        confidence: 100,
+        timestamp: Date.now(),
+      },
+    ];
+  });
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedPersona, setSelectedPersona] = useState(agent?.useCase || 'general');
@@ -69,7 +102,6 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
         if (response.ok) {
           const data = await response.json();
           if (data.system_prompt) {
-            setInstructions(data.system_prompt);
             setInstructions(data.system_prompt);
             if (data.persona_type) {
               setSelectedPersona(data.persona_type);
@@ -100,7 +132,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
     }
   }, [agent?.crewaiSettings?.intentConfidence]);
 
-  // Load messages from localStorage on mount or when agentId changes
+  // Sync messages with localStorage when agentId changes (for navigation)
   useEffect(() => {
     if (agentId) {
       const savedMessages = localStorage.getItem(`chat_history_${agentId}`);
@@ -110,16 +142,6 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
         } catch (e) {
           console.error('Error parsing saved messages:', e);
         }
-      } else {
-        // Default greeting if no history
-        setMessages([
-          {
-            id: '1',
-            role: 'assistant',
-            content: 'Hello! How can I help you today?',
-            confidence: 100,
-          },
-        ]);
       }
     }
   }, [agentId]);
@@ -197,32 +219,46 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
     }
   };
 
-  // Fetch persona template when persona changes (mimic Step 4 behavior)
+  // Track mount state to prevent overwriting saved prompt on initial load
+  const isMounted = useRef(false);
+  const prevAgentId = useRef<string | undefined>(agentId);
+
+  // Fetch persona template when persona changes
   useEffect(() => {
-    // Skip on initial load if we already have agent instructions
-    // but allow fetching if the user explicitly changes the persona
+    // 1. Skip on initial load to preserve the agent's actual saved prompt
+    if (!isMounted.current) {
+      isMounted.current = true;
+      return;
+    }
+
+    // 2. Skip if agentId just changed (it means fetchSettings is already handling it)
+    if (prevAgentId.current !== agentId) {
+      prevAgentId.current = agentId;
+      return;
+    }
+
     const fetchTemplate = async () => {
-      setIsFetchingSettings(true)
+      setIsFetchingSettings(true);
       try {
-        const agentIdParam = agentId ? `&agent_id=${agentId}` : ''
-        const response = await fetch(`/api/agents/persona?type=${selectedPersona}${agentIdParam}`)
+        // Pass agentId if available to get the template pre-filled with business context
+        const agentIdParam = agentId ? `&agent_id=${agentId}` : '';
+        const response = await fetch(`/api/agents/persona?type=${selectedPersona}${agentIdParam}`);
+
         if (response.ok) {
-          const data = await response.json()
+          const data = await response.json();
           if (data.system_prompt) {
-            setInstructions(data.system_prompt)
+            setInstructions(data.system_prompt);
           }
         }
       } catch (error) {
-        console.error('Error fetching persona template:', error)
+        console.error('Error fetching persona template:', error);
       } finally {
-        setIsFetchingSettings(false)
+        setIsFetchingSettings(false);
       }
-    }
+    };
 
-    // Only if it's not the initial mount and the persona actually changed
-    // In a real app we might want a ref to check mount state
-    fetchTemplate()
-  }, [selectedPersona])
+    fetchTemplate();
+  }, [selectedPersona, agentId]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -232,6 +268,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
       id: Date.now().toString(),
       role: 'user',
       content: input,
+      timestamp: Date.now(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -261,6 +298,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
             role: m.role,
             content: m.content
           })),
+          system_prompt: instructions,
         }),
       });
 
@@ -289,6 +327,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
         tokens: data.tokens,
         responseTime: data.responseTime,
         intent: data.intent,
+        timestamp: Date.now(),
         matchedQAPair: data.matchedQAPair,
       };
 
@@ -307,6 +346,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
         role: 'assistant',
         content: 'Sorry, there was an error processing your message. Please try again.',
         confidence: 0,
+        timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -324,6 +364,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
         role: 'assistant',
         content: 'Hello! How can I help you today?',
         confidence: 100,
+        timestamp: Date.now(),
       },
     ]);
   };
@@ -586,51 +627,40 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
                     : 'bg-secondary rounded-tl-sm'
                     }`}
                 >
-                  <p className="text-sm leading-relaxed">{message.content}</p>
+                  {message.role === 'user' ? (
+                    <p className="text-sm leading-relaxed">{message.content}</p>
+                  ) : (
+                    <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none 
+                                  prose-p:leading-relaxed prose-pre:bg-muted prose-pre:p-0
+                                  prose-a:text-blue-400 prose-a:underline hover:prose-a:text-blue-500
+                                  prose-ul:list-disc prose-ul:ml-4 prose-ol:list-decimal prose-ol:ml-4">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </div>
 
                 {message.role === 'assistant' && (
-                  <div className="flex flex-col gap-2 mt-2 text-xs text-text-muted">
-                    {message.intent && (
-                      <div className="flex items-center gap-2">
-                        <Zap className="h-3 w-3 text-primary" />
-                        <span className="text-primary font-medium">Intent: {message.intent}</span>
-                        {message.confidence && (
-                          <span className="text-muted-foreground">
-                            ({message.confidence}% confidence)
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {message.confidence && !message.intent && (
-                      <span className="flex items-center gap-1">
-                        Confidence: {message.confidence}%
-                      </span>
-                    )}
-                    {message.matchedQAPair && (
-                      <div className="bg-muted/50 p-2 rounded text-xs">
-                        <div className="font-medium mb-1">Matched Q&A:</div>
-                        <div className="text-muted-foreground">
-                          Q: {message.matchedQAPair.question}
-                        </div>
-                      </div>
-                    )}
-                    {message.sources && message.sources.length > 0 && (
-                      <div className="flex items-center gap-1">
-                        <FileText className="h-3 w-3" />
-                        <span>
-                          Sources: {message.sources.map(s =>
-                            typeof s === 'string' ? s : (s.title || s.url || 'Unknown Source')
-                          ).join(', ')}
-                        </span>
-                      </div>
-                    )}
-                    {(message.tokens || message.responseTime) && (
+                  <div className="flex flex-col gap-2 mt-2 text-xs text-text-muted w-full">
+                    {/* Time and Feedback Buttons */}
+                    <div className="flex items-center gap-4 mt-1">
+                      <span>{formatTimeAgo(message.timestamp)}</span>
                       <div className="flex items-center gap-3">
-                        {message.tokens && <span>{message.tokens} tokens</span>}
-                        {message.responseTime && <span>{message.responseTime}s</span>}
+                        <button
+                          onClick={() => handleFeedback(message.id, 'like')}
+                          className={`hover:text-primary transition-colors ${message.feedback === 'like' ? 'text-primary' : ''}`}
+                        >
+                          <ThumbsUp className={`h-3.5 w-3.5 ${message.feedback === 'like' ? 'fill-current' : ''}`} />
+                        </button>
+                        <button
+                          onClick={() => handleFeedback(message.id, 'unlike')}
+                          className={`hover:text-destructive transition-colors ${message.feedback === 'unlike' ? 'text-destructive' : ''}`}
+                        >
+                          <ThumbsDown className={`h-3.5 w-3.5 ${message.feedback === 'unlike' ? 'fill-current' : ''}`} />
+                        </button>
                       </div>
-                    )}
+                    </div>
                   </div>
                 )}
               </div>

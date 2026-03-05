@@ -1,0 +1,6 @@
+Scrape URL: https://techifyhub.in
+Pages: 110
+Scrape Time: 57.38s
+Index Time: 26.67s
+Total Time: 97.80s
+Chunks: 244

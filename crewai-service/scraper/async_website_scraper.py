@@ -54,10 +54,10 @@ class ScrapedPage:
 @dataclass
 class AsyncScrapeOptions:
     """Options for async website scraping"""
-    max_pages: int = 100
-    max_depth: int = 5
-    concurrency: int = 2  # Further reduced for stability
-    delay: float = 0.8    # Increased base delay
+    max_pages: int = 300   # Increased for better coverage
+    max_depth: int = 10    # Increased to reach deep product pages
+    concurrency: int = 25  # Increased for extreme speed
+    delay: float = 0.05    # Minimal delay for internal scale
     timeout: int = 30
     follow_external: bool = False
     respect_robots: bool = True
@@ -97,6 +97,7 @@ class AsyncWebsiteScraper:
         # State management
         self.visited_urls: Set[str] = set()
         self.scraped_pages: List[ScrapedPage] = []
+        self.scraped_pages_urls: Set[str] = set() # Track for fast deduplication check
         self.errors: List[Dict[str, str]] = []
         self.queue: asyncio.Queue = asyncio.Queue()
         self.semaphore: asyncio.Semaphore = asyncio.Semaphore(self.options.concurrency)
@@ -404,9 +405,15 @@ class AsyncWebsiteScraper:
         # Clean main content (remove scripts, styles, etc.)
         # Use same approach as BeautifulSoupScraper
         try:
-            # Remove unwanted tags - same as BeautifulSoupScraper
-            unwanted_tags = ['script', 'style', 'noscript', 'nav', 'header', 'footer', 
-                            'aside', 'iframe', 'svg', 'canvas', 'form']
+            # Determine if this is an info page
+            url_lower = url.lower()
+            is_info_page = any(w in url_lower for w in ["contact", "about", "support", "headquarter", "location"])
+
+            # Remove unwanted tags - but spare footer/nav on info pages
+            unwanted_tags = ['script', 'style', 'noscript', 'iframe', 'svg', 'canvas', 'form']
+            if not is_info_page:
+                unwanted_tags.extend(['nav', 'header', 'footer', 'aside'])
+            
             for tag in unwanted_tags:
                 try:
                     for element in main_content.find_all(tag):
@@ -415,13 +422,18 @@ class AsyncWebsiteScraper:
                     logger.debug(f"Error removing {tag} tags: {e}")
                     continue
             
-            # Also remove elements with common ad/sidebar classes - same as BeautifulSoupScraper
-            unwanted_classes = ['ad', 'advertisement', 'ads', 'sidebar', 'social', 
-                               'share', 'comments', 'cookie', 'popup', 'modal',
-                               'menu', 'navigation', 'nav']
+            # Also remove elements with common ad/sidebar classes
+            unwanted_classes = ['ad', 'advertisement', 'ads', 'social', 
+                               'share', 'comments', 'cookie', 'popup', 'modal']
+            
             for class_name in unwanted_classes:
                 try:
                     for element in main_content.find_all(class_=lambda x: x and class_name in str(x).lower()):
+                        # Check if it contains a price OR contact info before decomposing
+                        text = element.get_text().lower()
+                        spare_keywords = ['₹', 'rs.', 'price', 'cost', 'email', 'phone', '+91', '@']
+                        if any(p in text for p in spare_keywords):
+                            continue
                         element.decompose()
                 except Exception as e:
                     logger.debug(f"Error removing {class_name} class elements: {e}")
@@ -580,12 +592,16 @@ class AsyncWebsiteScraper:
         on detected JS-heavy sites.
         """
         async with self.semaphore:
+            # Final deduplication guard to catch race conditions
+            if url in self.scraped_pages_urls:
+                return None
+                
             try:
-                # Add delay for politeness
+                # Add delay for politeness (now much lower)
                 if self.visited_urls:
                     await asyncio.sleep(self.options.delay)
                 
-                # Mark as visited
+                # Mark as visited (redundant but safe)
                 self.visited_urls.add(url)
                 
                 # Try BeautifulSoup first
@@ -618,8 +634,11 @@ class AsyncWebsiteScraper:
                 is_js_heavy = any(ind in content_lower for ind in js_indicators)
                 is_low_content = len(bs_page.main_content.strip()) < 500
                 
-                # If quality is low and looks like JS site, try Playwright
-                if (is_js_heavy or is_low_content) and depth <= 1: # Only for shallow pages for speed
+                # Fast Mode: Playwright is slow, only use if absolutely necessary AND if specifically allowed
+                # For high-speed crawls, we skip it by default unless it's a critical page
+                allow_playwright = depth == 0 # Only allow on root page for speed
+                
+                if (is_js_heavy or is_low_content) and allow_playwright:
                     try:
                         from .playwright_scraper import PlaywrightScraper
                         pw = PlaywrightScraper(timeout=45, page_timeout=45000)
@@ -720,6 +739,7 @@ class AsyncWebsiteScraper:
                 
                 if page:
                     self.scraped_pages.append(page)
+                    self.scraped_pages_urls.add(page.url)
                     
                     # Save page as JSON
                     await self._save_page_json(page)
@@ -727,19 +747,18 @@ class AsyncWebsiteScraper:
                     # Add new links to queue if within limits
                     if depth < self.options.max_depth and len(self.scraped_pages) < self.options.max_pages:
                         links_added = 0
-                        links_skipped = 0
                         for link in page.links:
+                            # CRITICAL: Add to visited_urls IMMEDIATELY when queuing
+                            # This is the primary fix for duplicate crawling
                             if link not in self.visited_urls:
                                 try:
+                                    self.visited_urls.add(link)
                                     self.queue.put_nowait((link, depth + 1))
                                     links_added += 1
                                 except asyncio.QueueFull:
                                     logger.warning(f"Queue full, skipping link: {link}")
-                                    links_skipped += 1
                         if links_added > 0:
                             logger.info(f"📎 Added {links_added} links to queue from {url[:60]}... (depth: {depth})")
-                        if links_skipped > 0:
-                            logger.warning(f"⚠️  Skipped {links_skipped} links (queue full)")
                 
                 self.queue.task_done()
                 
@@ -763,14 +782,17 @@ class AsyncWebsiteScraper:
         if initial_page:
             logger.info(f"📍 Using provided initial page for link discovery: {initial_page.url}")
             self.scraped_pages.append(initial_page)
+            self.scraped_pages_urls.add(initial_page.url)
             self.visited_urls.add(initial_page.url)
             
             # Add links from initial page to queue
             for link in initial_page.links:
-                if self._should_follow_link(link):
+                if self._should_follow_link(link) and link not in self.visited_urls:
+                    self.visited_urls.add(link)
                     await self.queue.put((link, 1))
         else:
             # Add starting URL to queue
+            self.visited_urls.add(self.base_url)
             await self.queue.put((self.base_url, 0))
         
         # Start worker tasks
@@ -784,9 +806,9 @@ class AsyncWebsiteScraper:
             # Wait for queue to be empty and workers to finish
             await self.queue.join()
             
-            # Give workers more time to finish current tasks
-            logger.info("Queue empty, waiting for workers to finish...")
-            await asyncio.sleep(2.0)  # Increased from 0.5 to 2.0
+            # Give workers a tiny bit of time to settle
+            logger.info("Queue empty, finishing up...")
+            await asyncio.sleep(0.2) 
             
             # Check if we've reached max pages
             if len(self.scraped_pages) >= self.options.max_pages:

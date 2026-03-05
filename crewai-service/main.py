@@ -26,6 +26,7 @@ import os
 from dotenv import load_dotenv
 import random
 from datetime import datetime
+from urllib.parse import urlparse
 import logging
 
 # Configure logging to suppress debug logs from third-party libraries
@@ -83,7 +84,7 @@ class ScrapeRequest(BaseModel):
     max_depth: Optional[int] = 5   # Increased default
     follow_external: Optional[bool] = False
     respect_robots: Optional[bool] = True
-    delay: Optional[float] = 0.5
+    delay: Optional[float] = 0.05
     persona_type: Optional[str] = "general"
 
 class ScrapeResponse(BaseModel):
@@ -97,6 +98,7 @@ class ContentChatRequest(BaseModel):
     qa_pairs: Optional[List[QAPair]] = None
     history: Optional[List[Dict[str, str]]] = None
     persona_type: Optional[str] = "general"
+    system_prompt: Optional[str] = None
 
 class ContentChatResponse(BaseModel):
     text: str
@@ -497,6 +499,9 @@ async def chat_with_content(request: ContentChatRequest):
         # Determine persona: Request override > Stored metadata > Default
         persona_type = request.persona_type or (content_data.get("persona_type", "general") if content_data else "general")
         
+        # Determine system prompt: Request override > Stored metadata
+        system_prompt = request.system_prompt or (content_data.get("system_prompt") if content_data else None)
+
         # Use registry to avoid memory leaks from re-initializing models
         rag_agent = get_rag_agent(request.agent_id, business_context, persona_type)
         stats = rag_agent.get_stats()
@@ -549,7 +554,8 @@ async def chat_with_content(request: ContentChatRequest):
             max_context_length=2000,
             qa_pairs=qa_pairs_dict,
             history=request.history,
-            persona_type=persona_type
+            persona_type=persona_type,
+            system_prompt=system_prompt
         )
 
         return ContentChatResponse(
@@ -657,13 +663,18 @@ async def get_agent_settings(agent_id: str, persona_type: str = None):
                 business_context = f"This is an AI support assistant for {base_url}" if base_url else ""
             system_prompt = content_data.get("system_prompt")
         
-        # Get prompt from synthesizer if not already in content_data
-        if not system_prompt:
+        # Get prompt from synthesizer if not already in content_data OR if persona_type was explicitly changed
+        saved_persona = content_data.get("persona_type") if content_data else None
+        is_persona_changed = persona_type is not None and persona_type != saved_persona
+        should_recalculate = not system_prompt or is_persona_changed
+        
+        if should_recalculate:
             rag_agent = get_rag_agent(agent_id, base_company_info=business_context, persona_type=active_persona)
             system_prompt = rag_agent.synthesizer.get_persona_prompt(active_persona)
         
         return {
             "agent_id": agent_id,
+            "agent_name": content_data.get("title") if content_data else "Assistant",
             "persona_type": active_persona,
             "system_prompt": system_prompt
         }
@@ -720,6 +731,11 @@ async def scrape(request: ScrapeRequest):
         url = request.url.strip()
         if not url.startswith(("http://", "https://")):
             url = f"https://{url}"
+        
+        # Validate URL format
+        parsed = urlparse(url)
+        if not parsed.netloc or "." not in parsed.netloc or " " in parsed.netloc:
+            raise HTTPException(status_code=400, detail="Invalid URL format. Please provide a valid website address (e.g., techifyhub.in).")
         
         # Create scrape options
         scrape_options = AsyncScrapeOptions(
@@ -806,7 +822,25 @@ async def scrape(request: ScrapeRequest):
         # 🧪 Extract dynamic Business Context from content
         try:
             temp_synthesizer = SynthesisAgent(llm_agent=llm_agent)
-            extracted_context = temp_synthesizer.extract_business_context(combined_content)
+            
+            # Create an identity context from the home page or base URL
+            home_page = None
+            for page in scraped_content.pages:
+                if page.url.rstrip('/') == url.rstrip('/'):
+                    home_page = page
+                    break
+            if not home_page and scraped_content.pages:
+                home_page = scraped_content.pages[0] # Fallback to first page
+                
+            site_info = None
+            if home_page:
+                site_info = {
+                    "url": home_page.url,
+                    "title": home_page.title,
+                    "description": home_page.meta_description
+                }
+            
+            extracted_context = temp_synthesizer.extract_business_context(combined_content, site_info=site_info)
             response_data["business_context"] = extracted_context
             print(f"🏢 Extracted Business Context: {extracted_context}")
         except Exception as e:
@@ -825,7 +859,7 @@ async def scrape(request: ScrapeRequest):
                         # Validate content is readable text (not binary/garbled)
                         def is_readable_text(text: str) -> bool:
                             """Check if text is readable (not binary/garbled)"""
-                            if not text or len(text.strip()) < 50:
+                            if not text:
                                 return False
                             # Check if text contains mostly printable ASCII/Unicode characters
                             printable_ratio = sum(1 for c in text[:1000] if c.isprintable() or c.isspace()) / min(len(text), 1000)
@@ -837,13 +871,21 @@ async def scrape(request: ScrapeRequest):
                         print(f"🔄 Indexing scraped content into RAG vector store...")
                         rag_agent = RAGAgent(agent_id=request.agent_id, llm_agent=llm_agent)
                         
+                        # Clear old index first to ensure a fresh, complete rebuild
+                        rag_agent.doc_store.delete_index()
+                        print(f"🗑️  Cleared old RAG index for fresh rebuild.")
+                        
                         # Prepare pages for indexing (filter out garbled content)
                         pages_for_indexing = []
                         for page in scraped_content.pages:
                             page_content = page.main_content or ""
                             
                             # Validate content is readable
-                            if page_content and len(page_content.strip()) > 50:
+                            page_url_lower = (page.url or "").lower().rstrip('/')
+                            is_info_page = any(w in page_url_lower for w in ["contact", "about", "support", "headquarter", "location"])
+                            min_len = 15 if is_info_page else 50
+                            
+                            if page_content and len(page_content.strip()) > min_len:
                                 if is_readable_text(page_content):
                                     pages_for_indexing.append({
                                         "url": page.url,

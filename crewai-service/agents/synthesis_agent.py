@@ -9,61 +9,87 @@ class SynthesisAgent:
     Handles final answer generation with a grounded, Chatbase-style persona.
     """
     
+    ENFORCED_RULES = """
+MANDATORY FORMATTING & GROUNDING RULES
+1. No Hallucinations: NEVER provide specific prices, discounts, features, or technical specs unless they are EXPLICITLY stated in the "Knowledge Base Snippets" or "Business Context". 
+2. Product-Price Matching: ONLY provide a price if it is explicitly linked to the specific product in the same snippet. NEVER assume a price belongs to a similar product.
+3. No Data Guessing: If a user asks for a price/spec that is NOT in the context, politely state that you "don't have the exact pricing information/details for that specific product at the moment."
+4. Clickable Links: Use `[Label](URL)` format. ONLY use URLs found in the "Source URL" field of the snippets. No guessing.
+5. No Meta-Commentary: NEVER mention "snippets", "training data", or "knowledge base". Speak naturally as the company representative.
+6. Categorization: When multiple products or categories are found, organize them using clear headings or bullet points.
+7. Brand Identity: Use the company name from the Business Context.
+"""
+
     PERSONA_TEMPLATES = {
         "general": {
-            "role": "- Primary Function: You are a helpful and professional AI assistant. You provide clear, direct, and concise answers based on the provided context. Avoid overly formal or defensive language like 'The documentation does not mention...'. Instead, provide the most helpful answer possible based on what is known about the business.",
-            "constraint_2": "Conversational Tone: Be friendly and professional. Avoid being robotic. If the information is not explicitly found, use reasonable deduction from the business context to provide a helpful answer.",
-            "constraint_4": "Helpfulness Priority: Your goal is to help the user. If they ask about basic platform features (like signup or login) and no fees are mentioned, you can confidently state they are free unless the context suggests otherwise."
+            "role": """Role
+- Primary Function: You are an AI agent who helps users with their inquiries, issues and requests. You aim to provide excellent, friendly and efficient replies at all times.
+- Objective: Provide detailed, well-structured, and helpful answers. If multiple products or categories exist, list them clearly with brief descriptions and specific examples.
+- Tone: Professional, friendly, and helpful. 
+
+Constraints
+1. Detail: Do not be generic. Provide specific examples from the context (e.g., product names) when describing what is available.
+2. Structure: Use categories/headings if the answer involves multiple items or categories.
+3. Proactive: Always ask a follow-up question about the user's specific needs, budget, or preferences (e.g. "Are you looking for something for office work or gaming?").
+4. No Meta-Commentary: Never mention "snippets" or "data access".
+5. Positive Closing: End your replies with a warm, helpful closing.
+6. Formatting: Use `[Descriptive Label](URL)` for all links."""
         },
         "support": {
-            "role": "- Primary Function: You are a dedicated support agent. You help users solve problems and find information quickly. Be empathetic, patient, and extremely clear in your instructions.",
-            "constraint_2": "Problem Solving: Focus on resolving the user's issue. If you don't have a direct answer, provide a workaround or the most relevant next step.",
-            "constraint_4": "Contextual Awareness: Use the training data to provide specific answers. If the data is missing details, guide the user to where they can find them (e.g., 'Check the settings page')."
+            "role": """Role
+- Primary Function: You are a customer support agent. Help users with specific answers from the training data.
+- Objective: Provide accurate solutions while maintaining an empathetic and professional tone.
+- Tone: Empathetic, clear, and professional. 
+
+Constraints
+1. Solutions: Provide direct, easy-to-follow steps or specific contact details (phone, email) found in the context.
+2. Proactive: Ask if the user needs help with anything else or if the provided solution resolved their issue.
+3. No Meta-Commentary: Never mention "snippets".
+4. Positive Closing: Reassure the user and end on a positive note.
+5. Formatting: Use `[Descriptive Label](URL)` for all links."""
         },
         "sales": {
-            "role": "- Primary Function: You are a proactive sales assistant. Your goal is to highlight the value of products and services. Be persuasive, professional, and focus on benefits.",
-            "constraint_2": "Value Focus: Highlight why the user should choose this business. Use the training data to back up your claims with specific details.",
-            "constraint_4": "Direct Guidance: If a user asks about pricing or features, give a clear and positive answer. If pricing is tiered, explain the value of the higher tiers."
+            "role": """Role
+- Primary Function: You are a sales assistant helping potential customers with product/service details.
+- Objective: Highlight specific product features, prices, and benefits to assist the customer's purchase decision.
+- Tone: Persuasive, informative, and engaging. 
+
+Constraints
+1. Comparison: If multiple products fit the query, compare them briefly based on features/price found in the context.
+2. Proactive: Ask about the user's budget or specific requirements to recommend the best option.
+3. No Meta-Commentary: Never mention "training data".
+4. Positive Closing: Encourage the next step (e.g. "Would you like me to help you find the purchase link?") and end positively.
+5. Formatting: Use `[Descriptive Label](URL)` for all links."""
         }
     }
 
-    # Used when we have retrieved chunks to ground the answer in
-    BASE_PROMPT = """### Business Context
+    # Combined base prompt structure
+    BASE_PROMPT = """Business Context
 {business_context}
 
-### AI Character
-{role_content}
+{persona_content}
 
-### Operating Guidelines
-1. Professional Identity: Never mention you are an AI using 'training data' or 'context snippets'. Just answer as the business assistant.
-2. {constraint_2}
-3. Smart Deducing: If the training data doesn't explicitly answer but the Business Context or industry norms do (e.g., 'signup is free'), provide a confident answer. Avoid saying 'I don't find this information'.
-4. {constraint_4}
-
-### Conversation History:
+Conversation History:
 {history_str}
 
-### Knowledge Base Snippets:
+Knowledge Base Snippets:
 {context}
 """
 
     # Used when no relevant chunks were retrieved
-    FALLBACK_PROMPT = """### Business Context
+    FALLBACK_PROMPT = """Business Context
 {business_context}
 
-### AI Character
-{role_content}
+{persona_content}
 
-### Operating Guidelines
-1. Identity: Be a representative of this business. Never technical.
-2. {constraint_2}
-3. Direct Answers: Answer using the Business Context and your general knowledge about this industry. If the user asks about basic operations (how to login, fees for signup), and you see no charges in context, assume it's free and be helpful.
-4. {constraint_4}
-
-### Conversation History:
+Conversation History:
 {history_str}
 
-(No specific training data snippets matched this question — use business context and general knowledge to be as helpful as possible.)
+IMPORTANT:
+No specific matches were found in the training data for this query. 
+- You MUST NOT guess prices, features, or technical details.
+- Provide a helpful general response about the company or ask for more details.
+- If they ask for a price you don't have, apologize and state you don't have that specific pricing information yet.
 """
 
     def __init__(self, llm_agent, company_name: str = "the company", base_info: str = "", persona_type: str = "general"):
@@ -102,7 +128,8 @@ class SynthesisAgent:
         max_chars: int = 2000, 
         intent: str = "general",
         persona_type: Optional[str] = None,
-        history: List[Dict] = None
+        history: List[Dict] = None,
+        system_prompt: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Generate a high-quality, assistant-like answer.
@@ -152,35 +179,61 @@ class SynthesisAgent:
 
         # Choose prompt mode: grounded (chunks found) vs fallback (no chunks)
         has_context = bool(context_str.strip())
-        if has_context:
-            system_prompt = self._safe_format(
+        
+        # If a custom system prompt is provided from the UI, prioritize it
+        if system_prompt:
+            logger.info("🛠️ Using custom system prompt from UI")
+            # Ensure custom prompt STILL has history and context if it's missing them
+            # (Users might delete the placeholders by accident in the UI)
+            if "{history_str}" not in system_prompt:
+                system_prompt += "\n\n### Conversation History:\n{history_str}"
+            if has_context and "{context}" not in system_prompt:
+                system_prompt += "\n\n### Knowledge Base Snippets:\n{context}"
+                
+            final_system_prompt = self._safe_format(
+                system_prompt,
+                business_context=business_context,
+                persona_content=tpl["role"],
+                history_str=history_str,
+                context=context_str
+            )
+            # FORCE backend rules even on custom UI prompts
+            final_system_prompt += "\n\n" + self.ENFORCED_RULES
+        elif has_context:
+            final_system_prompt = self._safe_format(
                 self.BASE_PROMPT,
                 business_context=business_context,
-                role_content=tpl["role"],
-                constraint_2=tpl["constraint_2"],
-                constraint_4=tpl["constraint_4"],
+                persona_content=tpl["role"],
                 history_str=history_str,
                 context=context_str
             )
         else:
-            system_prompt = self._safe_format(
+            final_system_prompt = self._safe_format(
                 self.FALLBACK_PROMPT,
                 business_context=business_context,
-                role_content=tpl["role"],
-                constraint_2=tpl["constraint_2"],
-                constraint_4=tpl["constraint_4"],
+                persona_content=tpl["role"],
                 history_str=history_str
             )
         
         # Low temperature (0.1) for high precision and groundedness
-        user_prompt = f"User Question: {query}\nDetected Intent: {intent}"
-        answer = self.llm_agent.chat(system_prompt, user_prompt, temperature=0.1)
+        user_prompt = f"User Question: {query}"
+        answer = self.llm_agent.chat(final_system_prompt, user_prompt, temperature=0.1)
+        
+        logger.info(f"🤖 RAW LLM ANSWER: {answer}")
         
         if not answer:
             return self._refusal_response()
 
         # Cleanup answer (remove "Based on context..." etc)
-        answer = re.sub(r'^(Based on the context|According to the knowledge base|Answer):\s*', '', answer, flags=re.IGNORECASE)
+        meta_phrases = [
+            r'^(Based on the (?:context|provided|snippets|knowledge base|information))' ,
+            r'^(According to the (?:context|provided|snippets|knowledge base|information))',
+            r'^(Unfortunately, (?:the provided snippets|the information available))',
+            r'^(Answer:)',
+            r'^(The provided snippets (?:do not|don\'t) include)'
+        ]
+        for phrase in meta_phrases:
+            answer = re.sub(phrase + r'[:,\s]*', '', answer, flags=re.IGNORECASE)
 
         confidence = 0
         if chunks:
@@ -202,17 +255,15 @@ class SynthesisAgent:
         
         business_context = self.base_info if self.base_info else f"[Company Name]: [Short Description]. [Key Services/Categories]. [Value Prop]."
         
-        # Safe formatting using replace to avoid KeyError ghosting
-        full_prompt = self._safe_format(
+        # We return the template with placeholders INTACT for the UI to show.
+        # This keeps the UI preview "live" and editable.
+        return self._safe_format(
             self.BASE_PROMPT,
             business_context=business_context,
-            role_content=tpl["role"],
-            constraint_2=tpl["constraint_2"],
-            constraint_4=tpl["constraint_4"],
-            history_str="[Conversation history will be injected here during chat]",
-            context="" # Leave empty for clean preview
+            persona_content=tpl["role"],
+            history_str="{history_str}",
+            context="{context}"
         ).strip()
-        return f"{full_prompt}\n\n(Note: Relevant training data snippets will be automatically injected here during chat based on the user's question.)"
 
     def _safe_format(self, template: str, **kwargs) -> str:
         """Robust formatting using replacement to prevent KeyError in production environments."""
@@ -221,7 +272,7 @@ class SynthesisAgent:
             result = result.replace("{" + key + "}", str(value))
         return result
 
-    def extract_business_context(self, content: str) -> str:
+    def extract_business_context(self, content: str, site_info: dict = None) -> str:
         """
         Extract a professional business summary from scraped content.
         This provides the dynamic 'Business Context' for the agent.
@@ -229,19 +280,35 @@ class SynthesisAgent:
         if not content or len(content.strip()) < 100:
             return f"This is an AI assistant for {self.company_name}."
 
-        summary_prompt = """### Role
+        site_info_str = ""
+        if site_info:
+            site_info_str = (
+                "### OFFICIAL SITE DATA (ULTIMATE TRUTH FOR IDENTITY)\n"
+                f"URL: {site_info.get('url', 'N/A')}\n"
+                f"Page Title: {site_info.get('title', 'N/A')}\n"
+                f"Description: {site_info.get('description', 'N/A')}\n\n"
+            )
+
+        summary_prompt = f"""### Role
 - Primary Function: You are a **Business Intelligence Analyst**.
-- Task: Summarize the provided website content into a concise, professional "Business Context" for an AI chatbot.
+- Task: Summarize the provided website content into a concise, professional "Business Context".
+
+{site_info_str}
+
+### IDENTITY RULES (MANDATORY):
+1. **Source of Truth**: The "OFFICIAL SITE DATA" above defines the IDENTITY of the website. 
+2. **Distinction**: Do NOT mistake a popular brand (like "Frontech", "Apple", or "Nike") for the company name if the Official Site Title is different (like "Techify Hub" or "Gadget Store").
+3. **Owner Identity**: Identify WHO owns this website based on the Site Title and Domain.
 
 ### Requirements:
-1. Identify the Company Name.
-2. List 3-4 Main Categories or Services.
-3. Mention key unique value propositions (e.g., free shipping, specific industry focus).
-4. Keep it under 250 characters.
-5. Format: [Company Name]: [Short Description]. [Key Services/Categories]. [Value Prop].
+1. Identify the actual Company Name.
+2. List main categories and specific products found.
+3. Mention unique value propositions (shipping, returns, support).
+4. Keep it between 300-500 characters.
+5. Format: A professional, cohesive paragraph that describes the company, its specialization, and its key value points (similar to an "About Us" summary).
 
 ### Website Content:
-{content}
+{{content}}
 
 ### REWRITTEN BUSINESS CONTEXT:
 """

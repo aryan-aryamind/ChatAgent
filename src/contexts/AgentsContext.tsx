@@ -1,3 +1,5 @@
+"use client"
+
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 
 export interface QAPair {
@@ -19,10 +21,11 @@ export interface Agent {
   maxTokens?: number
   systemPrompt?: string
   lastTrained?: string
-  status: 'active' | 'disabled'
+  status: 'active' | 'disabled' | 'hidden'
   conversations?: number
   sources?: number
   qaPairs?: QAPair[]
+  expiresAt?: string | null
   crewaiSettings?: {
     intentConfidence: number
   }
@@ -98,64 +101,104 @@ function saveAgentsToStorage(agents: Agent[]) {
 }
 
 export function AgentsProvider({ children }: { children: ReactNode }) {
-  // Always start with initialAgents to avoid hydration mismatch
-  // We'll load from localStorage only on the client side
   const [agents, setAgents] = useState<Agent[]>(initialAgents)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
 
-  // Load agents from localStorage on mount (client-side only)
+  // 1. Load from DB on mount
   useEffect(() => {
-    // Only run on client
-    if (typeof window === 'undefined') {
-      return
+    const fetchAgents = async () => {
+      try {
+        const response = await fetch('/api/agents/list')
+        if (response.ok) {
+          const dbAgents = await response.json()
+          setAgents(dbAgents)
+
+          // Trigger one-time local sync if needed
+          const localAgents = loadAgentsFromStorage()
+          const unsynced = localAgents.filter(local =>
+            !dbAgents.some((db: any) => db.id === local.id || db.name === local.name) &&
+            local.id !== '1' // Skip mock
+          )
+
+          if (unsynced.length > 0) {
+            syncLocalToDb(unsynced)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching db agents:', error)
+        // Fallback to local
+        setAgents(loadAgentsFromStorage())
+      } finally {
+        setIsLoaded(true)
+      }
     }
 
-    const loadedAgents = loadAgentsFromStorage()
-    setAgents(loadedAgents)
-    setIsLoaded(true)
+    fetchAgents()
   }, [])
 
-  // Save agents to localStorage whenever they change (but not during initial load)
-  useEffect(() => {
-    if (isLoaded && typeof window !== 'undefined') {
-      saveAgentsToStorage(agents)
-    }
-  }, [agents, isLoaded])
+  const syncLocalToDb = async (localAgents: Agent[]) => {
+    setIsSyncing(true)
+    console.log(`Syncing ${localAgents.length} local agents to database...`)
 
-  const addAgent = (agent: Agent) => {
-    setAgents((prev) => {
-      const updated = [...prev, agent]
-      saveAgentsToStorage(updated)
-      return updated
-    })
-  }
-
-  const updateAgent = (id: string, updates: Partial<Agent>) => {
-    setAgents((prev) => {
-      const updated = prev.map((agent) => (agent.id === id ? { ...agent, ...updates } : agent))
-      saveAgentsToStorage(updated)
-      return updated
-    })
-  }
-
-  const deleteAgent = (id: string) => {
-    if (!id) {
-      console.error('Cannot delete agent: ID is required')
-      return
-    }
-    
-    setAgents((prev) => {
-      const agentExists = prev.some((agent) => agent.id === id)
-      if (!agentExists) {
-        console.warn(`Agent with ID ${id} not found`)
-        return prev
+    for (const agent of localAgents) {
+      try {
+        await fetch('/api/agents/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...agent, status: agent.status || 'active' }),
+        })
+      } catch (e) {
+        console.error('Failed to sync agent:', agent.name, e)
       }
-      
-      const updated = prev.filter((agent) => agent.id !== id)
-      saveAgentsToStorage(updated)
-      console.log(`Agent ${id} deleted successfully. Remaining agents: ${updated.length}`)
-      return updated
-    })
+    }
+
+    // Clear local storage legacy data after attempt
+    localStorage.removeItem(STORAGE_KEY)
+
+    // Refresh list
+    const response = await fetch('/api/agents/list')
+    if (response.ok) {
+      setAgents(await response.json())
+    }
+    setIsSyncing(false)
+  }
+
+  const addAgent = async (agent: Agent) => {
+    // Note: step4-model.tsx now calls /api/agents/create directly
+    // This local state update is for immediate UI feedback
+    setAgents(prev => [...prev, agent])
+  }
+
+  const updateAgent = async (id: string, updates: Partial<Agent>) => {
+    // Optimistic update
+    setAgents(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a))
+
+    try {
+      await fetch(`/api/agents/update-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId: id, details: updates }),
+      })
+    } catch (e) {
+      console.error('Failed to update agent in DB:', e)
+    }
+  }
+
+  const deleteAgent = async (id: string) => {
+    if (!id) return
+
+    // Optimistic update
+    setAgents(prev => prev.filter(a => a.id !== id))
+
+    try {
+      await fetch(`/api/admin/manage-agent?agentId=${id}`, {
+        method: 'DELETE',
+      })
+    } catch (e) {
+      // If not admin, try user delete endpoint (if we have one, otherwise fallback)
+      console.error('Delete failed, might need user-specific delete endpoint:', e)
+    }
   }
 
   const getAgent = (id: string) => {
@@ -172,6 +215,11 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
         getAgent,
       }}
     >
+      {isSyncing && (
+        <div className="fixed bottom-4 right-4 bg-primary text-white p-4 rounded-lg shadow-lg z-[9999] animate-bounce">
+          Syncing your agents to database...
+        </div>
+      )}
       {children}
     </AgentsContext.Provider>
   )

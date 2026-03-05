@@ -42,6 +42,8 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           image: user.image,
+          role: user.role,
+          plan: user.plan,
         }
       },
     }),
@@ -61,8 +63,10 @@ export const authOptions: NextAuthOptions = {
         token.name = user.name
         token.email = user.email
         token.image = user.image
+        token.role = (user as any).role
+        token.plan = (user as any).plan
       }
-      
+
       // When session is updated, fetch latest user data from database
       if (trigger === 'update' && token.id) {
         try {
@@ -73,27 +77,33 @@ export const authOptions: NextAuthOptions = {
               name: true,
               email: true,
               image: true,
+              role: true,
+              plan: true,
             },
           })
-          
+
           if (updatedUser) {
             token.name = updatedUser.name
             token.email = updatedUser.email
             token.image = updatedUser.image
+            token.role = updatedUser.role
+            token.plan = updatedUser.plan
           }
         } catch (error) {
           console.error('Error fetching updated user:', error)
         }
       }
-      
+
       return token
     },
     async session({ session, token }) {
       if (session.user) {
-        ;(session.user as any).id = token.id as string
+        ; (session.user as any).id = token.id as string
         session.user.name = token.name as string | null
         session.user.email = token.email as string | null
         session.user.image = token.image as string | null
+          ; (session.user as any).role = token.role as string
+          ; (session.user as any).plan = token.plan as string
       }
       return session
     },

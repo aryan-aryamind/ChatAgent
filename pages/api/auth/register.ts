@@ -35,6 +35,8 @@ export default async function handler(
         name: name || null,
         email,
         password: hashedPassword,
+        role: 'USER',
+        plan: 'FREE',
       },
       select: {
         id: true,
