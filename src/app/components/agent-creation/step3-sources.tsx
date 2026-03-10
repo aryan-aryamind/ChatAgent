@@ -25,7 +25,7 @@ export function AgentCreationStep3() {
       return
     }
 
-    // Process sources - scrape URLs and generate Q&A pairs
+    // Process sources - scrape URLs and generate data
     const processSources = async () => {
       setIsProcessing(true)
       setHasProcessed(true)
@@ -62,7 +62,7 @@ export function AgentCreationStep3() {
 
               if (response.ok) {
                 const data = await response.json()
-                console.log(`Scraping successful for ${source.url}:`, data.data?.qaPairsCount || 0, 'Q&A pairs')
+                console.log(`Scraping successful for ${source.url}`)
 
                 // Save temp agent ID if available
                 if (data.data?.tempAgentId) {
@@ -70,25 +70,20 @@ export function AgentCreationStep3() {
                   setTempAgentId(data.data.tempAgentId)
                 }
 
-                // Update source with scraped Q&A pairs
+                // Update source with scraped data
                 if (data.data?.qaPairs && data.data.qaPairs.length > 0) {
-                  // Update the source with Q&A pairs
                   updateSourceQAPairs(source.id, data.data.qaPairs)
                   updateSourceStatus(source.id, 'completed')
-                  setProcessingSources(prev => {
-                    const next = new Set(prev)
-                    next.delete(source.id)
-                    return next
-                  })
                 } else {
-                  console.warn(`No Q&A pairs generated for ${source.url}`)
+                  console.warn(`No data generated for ${source.url}`)
                   updateSourceStatus(source.id, 'completed')
-                  setProcessingSources(prev => {
-                    const next = new Set(prev)
-                    next.delete(source.id)
-                    return next
-                  })
                 }
+
+                setProcessingSources(prev => {
+                  const next = new Set(prev)
+                  next.delete(source.id)
+                  return next
+                })
               } else {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
                 console.error('Scraping failed:', errorData)
@@ -180,13 +175,11 @@ export function AgentCreationStep3() {
                     <p className="font-medium">{source.name}</p>
                     <p className="text-sm text-muted-foreground">
                       {source.status === 'completed'
-                        ? source.type === 'link' && source.qaPairs && source.qaPairs.length > 0
-                          ? `Scraped successfully - ${source.qaPairs.length} Q&A pairs generated`
-                          : source.type === 'link'
-                            ? 'Scraped successfully (no Q&A pairs generated)'
-                            : 'Data fetched successfully'
+                        ? source.type === 'link'
+                          ? 'Scraped successfully'
+                          : 'Data fetched successfully'
                         : source.status === 'processing'
-                          ? 'Scraping website and generating Q&A pairs...'
+                          ? 'Scraping website and getting data...'
                           : source.status === 'error'
                             ? 'Failed to scrape. Please try again or check the URL.'
                             : 'Pending...'}

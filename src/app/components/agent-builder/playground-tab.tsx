@@ -394,6 +394,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
             </div>
 
             {/* Temperature */}
+            {/* 
             <div className="mb-6">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium">Temperature</label>
@@ -412,8 +413,10 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
                 <span>Creative</span>
               </div>
             </div>
+            */}
 
             {/* Max Tokens */}
+            {/* 
             <div className="mb-6">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium">Max Tokens</label>
@@ -427,6 +430,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
                 step={100}
               />
             </div>
+            */}
 
             {/* Instructions */}
             <div className="mb-6">

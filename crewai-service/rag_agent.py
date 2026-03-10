@@ -284,8 +284,11 @@ class RAGAgent:
         faq_hits = self.search_faq(query, top_k=3, min_similarity=0.1)
         doc_hits = self.search_docs(query, top_k=20, min_similarity=0.1)
         
+        logger.info(f"🔍 Retrieval: {len(faq_hits)} FAQ hits, {len(doc_hits)} Doc hits")
+        
         # 4. Re-ranking (Delegating Precision to Re-ranker)
         final_chunks = self._rerank_and_merge(query, doc_hits, faq_hits)
+        logger.info(f"🔍 Post-Rerank: {len(final_chunks)} chunks selected")
 
         # 5. Synthesis (Modular synthesis with specialized Prompt)
         result = self.synthesizer.synthesize(

@@ -89,6 +89,7 @@ model Agent {
   sources         Int      @default(0)
   qaPairs         Json?    // Store Q&A pairs as JSON
   crewaiSettings  Json?    // Store CrewAI settings as JSON
+  image           String?
   expiresAt       DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

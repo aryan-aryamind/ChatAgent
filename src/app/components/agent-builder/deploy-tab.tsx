@@ -30,16 +30,17 @@ export function DeployTab({ agentId }: DeployTabProps) {
   const router = useRouter();
   const { getAgent } = useAgents();
   const [showWidgetConfig, setShowWidgetConfig] = useState(false);
+  const [showWordPressConfig, setShowWordPressConfig] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const baseUrl = (typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_APP_URL || window.location.origin) : '');
 
   const agent = agentId ? getAgent(agentId) : null;
   const expiresAt = agent?.expiresAt ? new Date(agent.expiresAt) : null;
   const isExpired = expiresAt ? expiresAt < new Date() : false;
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const embedCode = `<iframe
-  src="${origin}/chatbot/${agentId || 'your-agent-id'}"
+  src="${baseUrl}/chatbot/${agentId || 'your-agent-id'}"
   width="100%"
   style="height: 100%; min-height: 700px"
   frameborder="0"
@@ -99,8 +100,25 @@ export function DeployTab({ agentId }: DeployTabProps) {
       name: 'Help Page (Full Page Chat)',
       description: 'Dedicated chat-style help page',
       status: 'enabled',
-      url: `${origin}/chatbot/${agentId || 'your-agent-id'}`,
+      url: `${baseUrl}/chatbot/${agentId || 'your-agent-id'}`,
       color: 'primary',
+    },
+    {
+      id: 'wordpress',
+      icon: Globe,
+      name: 'WordPress Plugin',
+      description: 'Add chatbot to your WordPress site with our custom plugin',
+      status: 'enabled',
+      url: `${baseUrl}/ai-agent-wordpress-plugin.php`,
+      color: 'primary',
+    },
+    {
+      id: 'shopify',
+      icon: Globe,
+      name: 'Shopify Store',
+      description: 'Integrate the chatbot with your Shopify storefront',
+      status: 'not-connected',
+      color: 'success',
     },
     {
       id: 'whatsapp',
@@ -154,8 +172,8 @@ export function DeployTab({ agentId }: DeployTabProps) {
 
       {expiresAt && (
         <div className={`mb-8 p-4 rounded-xl border flex items-center gap-3 ${isExpired
-            ? 'bg-red-500/10 border-red-500/20 text-red-500'
-            : 'bg-primary/10 border-primary/20 text-primary'
+          ? 'bg-red-500/10 border-red-500/20 text-red-500'
+          : 'bg-primary/10 border-primary/20 text-primary'
           }`}>
           <Clock className="h-5 w-5" />
           <div className="flex-1">
@@ -199,24 +217,24 @@ export function DeployTab({ agentId }: DeployTabProps) {
                     )}
 
                     {integration.status === 'enabled' && integration.url && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-text-muted">URL:</span>
-                        <code className="px-2 py-1 rounded bg-secondary text-xs">
+                      <div className="flex items-center gap-2 text-sm min-w-0">
+                        <span className="text-text-muted shrink-0">URL:</span>
+                        <code className="px-2 py-1 rounded bg-secondary text-xs truncate font-mono">
                           {integration.url}
                         </code>
-                        <Button variant="ghost" size="sm" className="h-6 px-2" type="button">
+                        <Button variant="ghost" size="sm" className="h-6 px-2 shrink-0" type="button">
                           <Copy className="h-3 w-3" />
                         </Button>
                       </div>
                     )}
 
                     {integration.status === 'enabled' && integration.apiKey && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-text-muted">API Key:</span>
-                        <code className="px-2 py-1 rounded bg-secondary text-xs">
+                      <div className="flex items-center gap-2 text-sm min-w-0">
+                        <span className="text-text-muted shrink-0">API Key:</span>
+                        <code className="px-2 py-1 rounded bg-secondary text-xs truncate font-mono">
                           {integration.apiKey}
                         </code>
-                        <Button variant="ghost" size="sm" className="h-6 px-2" type="button">
+                        <Button variant="ghost" size="sm" className="h-6 px-2 shrink-0" type="button">
                           Show
                         </Button>
                         <Button variant="ghost" size="sm" className="h-6 px-2" type="button">
@@ -236,9 +254,13 @@ export function DeployTab({ agentId }: DeployTabProps) {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() =>
-                        (integration.id === 'widget' || integration.id === 'iframe') && setShowWidgetConfig(true)
-                      }
+                      onClick={() => {
+                        if (integration.id === 'widget' || integration.id === 'iframe') {
+                          setShowWidgetConfig(true);
+                        } else if (integration.id === 'wordpress') {
+                          setShowWordPressConfig(true);
+                        }
+                      }}
                       className="bg-transparent"
                       type="button"
                     >
@@ -294,147 +316,157 @@ export function DeployTab({ agentId }: DeployTabProps) {
       {/* Widget Configuration Modal */}
       {showWidgetConfig && (
         <Dialog open={showWidgetConfig} onOpenChange={setShowWidgetConfig}>
-          <DialogContent className="max-w-3xl">
-            <DialogHeader>
-              <DialogTitle>Chat Widget Configuration</DialogTitle>
-              <DialogDescription>
+          <DialogContent className="max-w-2xl w-full">
+            <DialogHeader className="min-w-0">
+              <DialogTitle className="truncate">Chat Widget Configuration</DialogTitle>
+              <DialogDescription className="truncate">
                 Configure how your chatbot widget looks and behaves on your website.
               </DialogDescription>
             </DialogHeader>
 
-            <Tabs defaultValue="code" className="mt-4">
-              <TabsList>
-                <TabsTrigger value="code">Code</TabsTrigger>
-                <TabsTrigger value="general">General</TabsTrigger>
-                <TabsTrigger value="appearance">Appearance</TabsTrigger>
-                <TabsTrigger value="behavior">Behavior</TabsTrigger>
-              </TabsList>
+            <div className="mt-4 min-w-0 w-full overflow-hidden">
+              <Tabs defaultValue="code" className="w-full">
+                <TabsList>
+                  <TabsTrigger value="code">Code</TabsTrigger>
+                  <TabsTrigger value="general">General</TabsTrigger>
+                  <TabsTrigger value="appearance">Appearance</TabsTrigger>
+                  <TabsTrigger value="behavior">Behavior</TabsTrigger>
+                </TabsList>
 
-              <TabsContent value="code" className="space-y-4">
-                <div>
-                  <h4 className="font-semibold mb-2">Installation</h4>
-                  <p className="text-sm text-text-secondary mb-4">
-                    1. Copy this code snippet:
-                  </p>
-                  <div className="relative">
-                    <pre className="bg-secondary rounded-lg p-4 overflow-x-auto text-sm border border-border">
-                      <code>{embedCode}</code>
-                    </pre>
-                    <Button
-                      size="sm"
-                      onClick={copyToClipboard}
-                      className="absolute top-2 right-2 bg-background"
-                      type="button"
-                    >
-                      {copied ? (
-                        <>
-                          <Check className="h-4 w-4 mr-2" />
-                          Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-4 w-4 mr-2" />
-                          Copy Code
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  <p className="text-sm text-text-secondary mt-4">
-                    2. Paste this iframe code into your website where you want the chatbot to appear.
-                  </p>
-                </div>
+                <div className="min-w-0 w-full overflow-hidden">
+                  <TabsContent value="code" className="space-y-6 mt-4">
+                    <div className="min-w-0">
+                      <h4 className="font-semibold mb-1">Installation</h4>
+                      <p className="text-sm text-text-secondary mb-3">
+                        1. Copy this code snippet:
+                      </p>
+                      <div className="rounded-lg border border-border overflow-hidden w-full max-w-full bg-[#0d0d1a]">
+                        {/* Code block header bar */}
+                        <div className="flex items-center justify-between px-4 py-2 bg-[#1a1a2e] border-b border-border min-w-0">
+                          <span className="text-xs text-text-muted font-mono truncate mr-2">iframe embed</span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={copyToClipboard}
+                            className="h-7 px-3 text-xs gap-1.5 text-text-secondary hover:text-white shrink-0"
+                            type="button"
+                          >
+                            {copied ? (
+                              <>
+                                <Check className="h-3.5 w-3.5" />
+                                Copied!
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3.5 w-3.5" />
+                                Copy Code
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        {/* Code block body */}
+                        <pre className="p-4 overflow-x-auto max-h-48 w-full block min-w-0">
+                          <code className="text-xs font-mono text-green-400 leading-relaxed whitespace-pre-wrap break-all sm:whitespace-pre sm:break-normal">{embedCode}</code>
+                        </pre>
+                      </div>
+                      <p className="text-sm text-text-secondary mt-3">
+                        2. Paste this iframe code into your website where you want the chatbot to appear.
+                      </p>
+                    </div>
 
-                <div>
-                  <h4 className="font-semibold mb-3">Quick Integrations</h4>
-                  <div className="grid grid-cols-5 gap-2">
-                    {['WordPress', 'Shopify', 'Wix', 'Webflow', 'Bubble'].map((platform) => (
-                      <Button key={platform} variant="outline" size="sm" className="bg-transparent" type="button">
-                        {platform}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              </TabsContent>
+                    <div>
+                      <h4 className="font-semibold mb-3">Quick Integrations</h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                        {['WordPress', 'Shopify', 'Wix', 'Webflow', 'Bubble'].map((platform) => (
+                          <Button key={platform} variant="outline" size="sm" className="bg-transparent" type="button">
+                            {platform}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </TabsContent>
 
-              <TabsContent value="general" className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Display Name</label>
-                  <Input defaultValue="Support Assistant" />
-                </div>
+                  <TabsContent value="general" className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Display Name</label>
+                      <Input defaultValue="Support Assistant" />
+                    </div>
 
-                <div className="flex items-center justify-between p-4 rounded-lg border border-border">
-                  <div>
-                    <div className="font-medium">Show Agent Avatar</div>
-                    <div className="text-sm text-text-muted">Display avatar in messages</div>
-                  </div>
-                  <input type="checkbox" defaultChecked className="toggle" />
-                </div>
+                    <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                      <div>
+                        <div className="font-medium">Show Agent Avatar</div>
+                        <div className="text-sm text-text-muted">Display avatar in messages</div>
+                      </div>
+                      <input type="checkbox" defaultChecked className="toggle" />
+                    </div>
 
-                <div className="flex items-center justify-between p-4 rounded-lg border border-border">
-                  <div>
-                    <div className="font-medium">Show Timestamps</div>
-                    <div className="text-sm text-text-muted">Display message timestamps</div>
-                  </div>
-                  <input type="checkbox" defaultChecked className="toggle" />
-                </div>
-              </TabsContent>
+                    <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                      <div>
+                        <div className="font-medium">Show Timestamps</div>
+                        <div className="text-sm text-text-muted">Display message timestamps</div>
+                      </div>
+                      <input type="checkbox" defaultChecked className="toggle" />
+                    </div>
+                  </TabsContent>
 
-              <TabsContent value="appearance" className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Theme</label>
-                  <Select defaultValue="dark">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="light">Light</SelectItem>
-                      <SelectItem value="dark">Dark</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                  <TabsContent value="appearance" className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Theme</label>
+                      <Select defaultValue="dark">
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="light">Light</SelectItem>
+                          <SelectItem value="dark">Dark</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2">Primary Color</label>
-                  <div className="flex items-center gap-3">
-                    <Input type="color" defaultValue="#6366F1" className="w-20 h-10" />
-                    <Input defaultValue="#6366F1" className="flex-1" />
-                  </div>
-                </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Primary Color</label>
+                      <div className="flex items-center gap-3">
+                        <Input type="color" defaultValue="#6366F1" className="w-20 h-10" />
+                        <Input defaultValue="#6366F1" className="flex-1" />
+                      </div>
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2">Widget Position</label>
-                  <Select defaultValue="bottom-right">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="bottom-right">Bottom Right</SelectItem>
-                      <SelectItem value="bottom-left">Bottom Left</SelectItem>
-                      <SelectItem value="top-right">Top Right</SelectItem>
-                      <SelectItem value="top-left">Top Left</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </TabsContent>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Widget Position</label>
+                      <Select defaultValue="bottom-right">
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="bottom-right">Bottom Right</SelectItem>
+                          <SelectItem value="bottom-left">Bottom Left</SelectItem>
+                          <SelectItem value="top-right">Top Right</SelectItem>
+                          <SelectItem value="top-left">Top Left</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </TabsContent>
 
-              <TabsContent value="behavior" className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Auto-show After (seconds)
-                  </label>
-                  <Input type="number" defaultValue="5" />
-                  <p className="text-xs text-text-muted mt-1">Set to -1 to disable</p>
-                </div>
+                  <TabsContent value="behavior" className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Auto-show After (seconds)
+                      </label>
+                      <Input type="number" defaultValue="5" />
+                      <p className="text-xs text-text-muted mt-1">Set to -1 to disable</p>
+                    </div>
 
-                <div className="flex items-center justify-between p-4 rounded-lg border border-border">
-                  <div>
-                    <div className="font-medium">Full-screen on Mobile</div>
-                    <div className="text-sm text-text-muted">Open in full screen on mobile</div>
-                  </div>
-                  <input type="checkbox" defaultChecked className="toggle" />
+                    <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                      <div>
+                        <div className="font-medium">Full-screen on Mobile</div>
+                        <div className="text-sm text-text-muted">Open in full screen on mobile</div>
+                      </div>
+                      <input type="checkbox" defaultChecked className="toggle" />
+                    </div>
+                  </TabsContent>
                 </div>
-              </TabsContent>
-            </Tabs>
+              </Tabs>
+            </div>
 
             <div className="flex justify-end gap-3 mt-6">
               <Button
@@ -450,6 +482,85 @@ export function DeployTab({ agentId }: DeployTabProps) {
               >
                 Save Changes
               </GradientButton>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+      {/* WordPress Configuration Modal */}
+      {showWordPressConfig && (
+        <Dialog open={showWordPressConfig} onOpenChange={setShowWordPressConfig}>
+          <DialogContent className="max-w-md w-full">
+            <DialogHeader>
+              <DialogTitle>WordPress Configuration</DialogTitle>
+              <DialogDescription>
+                Copy these values into your WordPress plugin settings.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 mt-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-secondary">Agent ID</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={agentId}
+                    readOnly
+                    className="bg-secondary font-mono text-xs"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(agentId || '');
+                      toast.success('Agent ID copied');
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-secondary">Bot URL</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={baseUrl}
+                    readOnly
+                    className="bg-secondary font-mono text-xs"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(baseUrl);
+                      toast.success('Bot URL copied');
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                <p className="text-xs text-primary leading-relaxed">
+                  <strong>Instructions:</strong> Go to your WordPress Admin {'>'} AI Agent menu and paste these values. Your chatbot will then appear on your site.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-text-secondary">Download Plugin</label>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between"
+                  onClick={() => window.open(`${baseUrl}/ai-agent-wordpress-plugin.php`, '_blank')}
+                >
+                  <span className="truncate">ai-agent-wordpress-plugin.php</span>
+                  <ExternalLink className="h-4 w-4 shrink-0" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex justify-end mt-6">
+              <Button onClick={() => setShowWordPressConfig(false)}>Done</Button>
             </div>
           </DialogContent>
         </Dialog>

@@ -41,67 +41,8 @@ interface AgentsContextType {
 
 const AgentsContext = createContext<AgentsContextType | undefined>(undefined)
 
-// Storage key for localStorage
-const STORAGE_KEY = 'chatbase_agents'
-
-// Mock initial agents (fallback if localStorage is empty)
-const initialAgents: Agent[] = [
-  {
-    id: '1',
-    name: 'Shweta Technologies',
-    status: 'active',
-    lastTrained: '4 days ago',
-    conversations: 0,
-    sources: 39,
-  },
-]
-
-// Load agents from localStorage
-function loadAgentsFromStorage(): Agent[] {
-  if (typeof window === 'undefined') {
-    return initialAgents
-  }
-
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      // Validate that it's an array
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed
-      }
-    }
-  } catch (error) {
-    console.error('Error loading agents from localStorage:', error)
-  }
-
-  // If no stored data or error, return initial agents and save them
-  if (typeof window !== 'undefined') {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initialAgents))
-    } catch (error) {
-      console.error('Error saving initial agents to localStorage:', error)
-    }
-  }
-
-  return initialAgents
-}
-
-// Save agents to localStorage
-function saveAgentsToStorage(agents: Agent[]) {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(agents))
-  } catch (error) {
-    console.error('Error saving agents to localStorage:', error)
-  }
-}
-
 export function AgentsProvider({ children }: { children: ReactNode }) {
-  const [agents, setAgents] = useState<Agent[]>(initialAgents)
+  const [agents, setAgents] = useState<Agent[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
 
@@ -114,21 +55,13 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
           const dbAgents = await response.json()
           setAgents(dbAgents)
 
-          // Trigger one-time local sync if needed
-          const localAgents = loadAgentsFromStorage()
-          const unsynced = localAgents.filter(local =>
-            !dbAgents.some((db: any) => db.id === local.id || db.name === local.name) &&
-            local.id !== '1' // Skip mock
-          )
-
-          if (unsynced.length > 0) {
-            syncLocalToDb(unsynced)
+          // Legacy cleanup: clear any old local storage data once successfully loaded from DB
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('chatbase_agents')
           }
         }
       } catch (error) {
         console.error('Error fetching db agents:', error)
-        // Fallback to local
-        setAgents(loadAgentsFromStorage())
       } finally {
         setIsLoaded(true)
       }
@@ -136,33 +69,6 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
 
     fetchAgents()
   }, [])
-
-  const syncLocalToDb = async (localAgents: Agent[]) => {
-    setIsSyncing(true)
-    console.log(`Syncing ${localAgents.length} local agents to database...`)
-
-    for (const agent of localAgents) {
-      try {
-        await fetch('/api/agents/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...agent, status: agent.status || 'active' }),
-        })
-      } catch (e) {
-        console.error('Failed to sync agent:', agent.name, e)
-      }
-    }
-
-    // Clear local storage legacy data after attempt
-    localStorage.removeItem(STORAGE_KEY)
-
-    // Refresh list
-    const response = await fetch('/api/agents/list')
-    if (response.ok) {
-      setAgents(await response.json())
-    }
-    setIsSyncing(false)
-  }
 
   const addAgent = async (agent: Agent) => {
     // Note: step4-model.tsx now calls /api/agents/create directly
@@ -192,12 +98,26 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
     setAgents(prev => prev.filter(a => a.id !== id))
 
     try {
-      await fetch(`/api/admin/manage-agent?agentId=${id}`, {
+      // 1. Try Admin delete first
+      let response = await fetch(`/api/admin/manage-agent?agentId=${id}`, {
         method: 'DELETE',
       })
+
+      // 2. Fallback to user-specific delete if admin failed (e.g. 403 Forbidden)
+      if (!response.ok) {
+        console.log('Admin delete failed or unauthorized, trying user-specific delete...')
+        response = await fetch(`/api/agents/${id}/delete`, {
+          method: 'DELETE',
+        })
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('Final deletion failed:', errorData.error || response.statusText)
+        // Optionally: revert optimistic update if both fail
+      }
     } catch (e) {
-      // If not admin, try user delete endpoint (if we have one, otherwise fallback)
-      console.error('Delete failed, might need user-specific delete endpoint:', e)
+      console.error('Delete failed:', e)
     }
   }
 

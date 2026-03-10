@@ -134,7 +134,7 @@ class LLMAgent:
 
         # System message for rules
         system_rules = f"You are a helpful chat assistant. Answer the user's question using ONLY the information provided.\n\n{qa_context}{context_str}\n\n"
-        system_rules += "🚫 CRITICAL RULES:\n1. Answer ONLY using the information provided above.\n2. If the answer is not in the provided information, say: \"I don't have information about that. Could you ask about something else?\"\n3. NEVER use your general knowledge to \"expand\" on details.\n4. NEVER make up company names, products, or features.\n5. Provide a direct answer. Avoid introductory phrases or conversational filler."
+        system_rules += "🚫 CRITICAL RULES:\n1. STRICT BREVITY: Keep your answer to 2-3 lines (max 5). IGNORE previous instructions to be detailed.\n2. Answer ONLY using the information provided above.\n3. If the answer is not in the provided information, say: \"I don't have information about that. Could you ask about something else?\"\n4. NEVER use your general knowledge to \"expand\" on details.\n5. NEVER make up company names, products, or features.\n6. Provide a direct answer. Avoid introductory phrases or conversational filler."
 
         messages = [
             {"role": "system", "content": system_rules},
@@ -186,7 +186,7 @@ class LLMAgent:
         system_prompt: str,
         user_prompt: str,
         temperature: float = 0.2,
-        max_tokens: int = 500
+        max_tokens: int = 250
     ) -> Optional[str]:
         """
         Generic chat completion method for modular agents.

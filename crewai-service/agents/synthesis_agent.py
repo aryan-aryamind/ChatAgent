@@ -14,26 +14,29 @@ MANDATORY FORMATTING & GROUNDING RULES
 1. No Hallucinations: NEVER provide specific prices, discounts, features, or technical specs unless they are EXPLICITLY stated in the "Knowledge Base Snippets" or "Business Context". 
 2. Product-Price Matching: ONLY provide a price if it is explicitly linked to the specific product in the same snippet. NEVER assume a price belongs to a similar product.
 3. No Data Guessing: If a user asks for a price/spec that is NOT in the context, politely state that you "don't have the exact pricing information/details for that specific product at the moment."
-4. Clickable Links: Use `[Label](URL)` format. ONLY use URLs found in the "Source URL" field of the snippets. No guessing.
+4. Situational Links: ONLY include a link if it is directly relevant to the user's request, if the user explicitly asks for a link, or for a specific product reference. NEVER send the same link in every message if it is not requested. Use `[Label](URL)` format.
 5. No Meta-Commentary: NEVER mention "snippets", "training data", or "knowledge base". Speak naturally as the company representative.
 6. Categorization: When multiple products or categories are found, organize them using clear headings or bullet points.
 7. Brand Identity: Use the company name from the Business Context.
+8. BALANCED RESPONSE: 
+   - DEFAULT: Provide a comprehensive but concise answer (3-4 sentences). Don't wait for follow-up questions if the information is already in the context.
+   - ELABORATION: Maximum 6-8 sentences when the user asks for more details.
+   - Skip introductory fluff.
 """
 
     PERSONA_TEMPLATES = {
         "general": {
             "role": """Role
-- Primary Function: You are an AI agent who helps users with their inquiries, issues and requests. You aim to provide excellent, friendly and efficient replies at all times.
-- Objective: Provide detailed, well-structured, and helpful answers. If multiple products or categories exist, list them clearly with brief descriptions and specific examples.
-- Tone: Professional, friendly, and helpful. 
+- Primary Function: You are an AI agent who helps users with their inquiries, issues and requests.
+- Objective: Provide short, simple, and helpful answers. Organise information clearly.
+- Tone: Professional, friendly, and concise. 
 
 Constraints
-1. Detail: Do not be generic. Provide specific examples from the context (e.g., product names) when describing what is available.
-2. Structure: Use categories/headings if the answer involves multiple items or categories.
-3. Proactive: Always ask a follow-up question about the user's specific needs, budget, or preferences (e.g. "Are you looking for something for office work or gaming?").
-4. No Meta-Commentary: Never mention "snippets" or "data access".
-5. Positive Closing: End your replies with a warm, helpful closing.
-6. Formatting: Use `[Descriptive Label](URL)` for all links."""
+1. Brevity: Keep replies to 2-3 lines by default (max 5). 
+2. Proactive: If needed, ask a single short follow-up question.
+3. No Meta-Commentary: Never mention "snippets" or "data access".
+4. Formatting: Use links sparingly and only when directly relevant or requested. Use `[Descriptive Label](URL)`.
+"""
         },
         "support": {
             "role": """Role
@@ -88,8 +91,8 @@ Conversation History:
 IMPORTANT:
 No specific matches were found in the training data for this query. 
 - You MUST NOT guess prices, features, or technical details.
-- Provide a helpful general response about the company or ask for more details.
-- If they ask for a price you don't have, apologize and state you don't have that specific pricing information yet.
+- Provide a short (2-3 lines) helpful response or ask for more details.
+- If they ask for a price you don't have, apologize shortly and state you don't have that specific pricing information yet.
 """
 
     def __init__(self, llm_agent, company_name: str = "the company", base_info: str = "", persona_type: str = "general"):
@@ -215,9 +218,16 @@ No specific matches were found in the training data for this query.
                 history_str=history_str
             )
         
+        print(f"DEBUG: Final System Prompt Length: {len(final_system_prompt)}")
+        print(f"DEBUG: Enforced Rules at end: {final_system_prompt[-200:]}")
+        
         # Low temperature (0.1) for high precision and groundedness
         user_prompt = f"User Question: {query}"
         answer = self.llm_agent.chat(final_system_prompt, user_prompt, temperature=0.1)
+        
+        answer_str = answer or ""
+        print(f"DEBUG: Raw Answer Length: {len(answer_str)}")
+        print(f"DEBUG: Raw Answer Lines: {len(answer_str.splitlines())}")
         
         logger.info(f"🤖 RAW LLM ANSWER: {answer}")
         
@@ -234,6 +244,22 @@ No specific matches were found in the training data for this query.
         ]
         for phrase in meta_phrases:
             answer = re.sub(phrase + r'[:,\s]*', '', answer, flags=re.IGNORECASE)
+
+        # Force a trim based on request type (sentence count is more reliable than line count)
+        is_elaboration_request = any(word in query.lower() for word in ["elaborate", "detail", "more info", "explain more", "why", "how", "cloberate", "claborate", "elaborate"])
+        
+        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', answer_str) if s.strip()]
+        max_sentences = 8 if is_elaboration_request else 4
+        
+        if len(sentences) > max_sentences:
+            print(f"DEBUG: Trimming response. Sentences: {len(sentences)}, Limit: {max_sentences}")
+            # Try to keep the last sentence if it's a question
+            last_sentence = sentences[-1]
+            if last_sentence.endswith('?') and len(sentences) > max_sentences:
+                answer = " ".join(sentences[:max_sentences-1]) + " " + last_sentence
+            else:
+                answer = " ".join(sentences[:max_sentences])
+            print(f"DEBUG: Trimmed answer: {answer}")
 
         confidence = 0
         if chunks:
@@ -302,10 +328,11 @@ No specific matches were found in the training data for this query.
 
 ### Requirements:
 1. Identify the actual Company Name.
-2. List main categories and specific products found.
-3. Mention unique value propositions (shipping, returns, support).
-4. Keep it between 300-500 characters.
-5. Format: A professional, cohesive paragraph that describes the company, its specialization, and its key value points (similar to an "About Us" summary).
+2. Comprehensive Summary: Include all major categories, specific services/products mentioned, and auxiliary items (like samagri/puja items) found in the content.
+3. Detailed Context: Provide enough detail so the agent "knows" the business's full scope without needing multiple follow-up questions.
+4. Mention unique value propositions (shipping, returns, support).
+5. Keep it between 500-800 characters.
+6. Format: A professional, cohesive series of paragraphs that describes the company, its full range of specializations, and its key value points.
 
 ### Website Content:
 {{content}}

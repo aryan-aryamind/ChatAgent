@@ -123,14 +123,12 @@ export function AgentCreationProvider({ children }: { children: ReactNode }) {
       ...prev,
       sources: prev.sources.map((s) => {
         if (s.id === sourceId) {
-          // Get base name (remove existing Q&A count if present)
-          const baseName = s.name.replace(/\s*\(\d+\s*Q&A\)\s*$/i, '').trim()
+          // Get base name (remove existing Q&A or Data count if present)
+          const baseName = s.name.replace(/\s*\(\d+\s*(Q&A|Data)\)\s*$/i, '').trim()
           return {
             ...s,
             qaPairs,
-            name: s.type === 'link' && qaPairs.length > 0
-              ? `${baseName} (${qaPairs.length} Q&A)`
-              : baseName || s.name
+            name: baseName || s.name
           }
         }
         return s

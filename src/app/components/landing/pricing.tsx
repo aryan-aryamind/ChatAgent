@@ -30,7 +30,7 @@ const plans = [
       '2 chatbots',
       '11,000,000 characters/chatbot',
       'Everything in Hobby, plus:',
-      'Remove "Powered by Chatbase"',
+      'Remove "Powered by AI Agent"',
       'Advanced analytics',
       'Integrations (Slack, WhatsApp, etc.)',
       'Priority support',
@@ -77,23 +77,22 @@ export function Pricing() {
             Choose the plan that's right for you. All plans include a 7-day free trial.
           </p>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
           {plans.map((plan, index) => (
             <div
               key={index}
-              className={`relative bg-card rounded-2xl p-8 border ${
-                plan.popular
+              className={`relative bg-card rounded-2xl p-8 border ${plan.popular
                   ? 'border-primary shadow-xl shadow-primary/20 scale-105'
                   : 'border-border'
-              }`}
+                }`}
             >
               {plan.popular && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] text-white text-sm font-semibold">
                   Most Popular
                 </div>
               )}
-              
+
               <div className="mb-6">
                 <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
                 <p className="text-text-secondary text-sm mb-4">{plan.description}</p>
@@ -102,7 +101,7 @@ export function Pricing() {
                   <span className="text-text-secondary">{plan.period}</span>
                 </div>
               </div>
-              
+
               <div className="mb-6">
                 {plan.popular ? (
                   <GradientButton className="w-full">{plan.cta}</GradientButton>
@@ -112,7 +111,7 @@ export function Pricing() {
                   </Button>
                 )}
               </div>
-              
+
               <div className="space-y-3">
                 {plan.features.map((feature, featureIndex) => (
                   <div key={featureIndex} className="flex items-start gap-3">
@@ -124,7 +123,7 @@ export function Pricing() {
             </div>
           ))}
         </div>
-        
+
         <div className="mt-12 text-center">
           <p className="text-text-secondary mb-4">
             All plans include: Unlimited websites • API access • Chat history • Email support

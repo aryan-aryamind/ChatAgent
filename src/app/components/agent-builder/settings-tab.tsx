@@ -294,21 +294,22 @@ export function SettingsTab({ agentStatus, onStatusChange, agentId }: SettingsTa
               {/* AI Model */}
               <div>
                 <label className="block text-sm font-medium mb-2">AI Model</label>
-            <Select value={model} onValueChange={setModel}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="gpt-4o-mini">GPT-4o Mini (Fast, cost-effective)</SelectItem>
-                <SelectItem value="gpt-4o">GPT-4o (Most capable)</SelectItem>
-                <SelectItem value="claude-sonnet">Claude Sonnet 4.5 (Balanced)</SelectItem>
-                <SelectItem value="claude-opus">Claude Opus 4.5 (Advanced reasoning)</SelectItem>
-                <SelectItem value="gemini-pro">Gemini Pro (Google AI)</SelectItem>
-              </SelectContent>
-            </Select>
+                <Select value={model} onValueChange={setModel}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gpt-4o-mini">GPT-4o Mini (Fast, cost-effective)</SelectItem>
+                    <SelectItem value="gpt-4o">GPT-4o (Most capable)</SelectItem>
+                    <SelectItem value="claude-sonnet">Claude Sonnet 4.5 (Balanced)</SelectItem>
+                    <SelectItem value="claude-opus">Claude Opus 4.5 (Advanced reasoning)</SelectItem>
+                    <SelectItem value="gemini-pro">Gemini Pro (Google AI)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Temperature */}
+              {/* 
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm font-medium">Temperature</label>
@@ -327,8 +328,10 @@ export function SettingsTab({ agentStatus, onStatusChange, agentId }: SettingsTa
                   <span>1 = Creative</span>
                 </div>
               </div>
+              */}
 
               {/* Max Tokens */}
+              {/* 
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm font-medium">Max Tokens</label>
@@ -342,6 +345,7 @@ export function SettingsTab({ agentStatus, onStatusChange, agentId }: SettingsTa
                   step={100}
                 />
               </div>
+              */}
 
               {/* System Prompt */}
               <div>
@@ -433,7 +437,7 @@ export function SettingsTab({ agentStatus, onStatusChange, agentId }: SettingsTa
             <p className="text-sm text-text-secondary mb-4">
               Once you delete an agent, there is no going back. Please be certain.
             </p>
-            <Button 
+            <Button
               variant="destructive"
               onClick={() => setShowDeleteDialog(true)}
             >
