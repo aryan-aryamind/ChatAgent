@@ -21,6 +21,7 @@ export interface Source {
   name: string
   url?: string
   size?: string
+  file?: File
   status: 'pending' | 'processing' | 'completed' | 'error'
   qaPairs?: QAPair[]
 }
@@ -46,6 +47,7 @@ interface AgentCreationContextType {
   setSelectedModel: (model: string) => void
   setResponseMode: (mode: 'llm' | 'crewai') => void
   updateSourceStatus: (sourceId: string, status: Source['status']) => void
+  updateSourceName: (sourceId: string, name: string) => void
   updateSourceQAPairs: (sourceId: string, qaPairs: QAPair[]) => void
   setTempAgentId: (id: string) => void
   setAgentId: (id: string) => void
@@ -118,6 +120,13 @@ export function AgentCreationProvider({ children }: { children: ReactNode }) {
     }))
   }
 
+  const updateSourceName = (sourceId: string, name: string) => {
+    setState((prev) => ({
+      ...prev,
+      sources: prev.sources.map((s) => (s.id === sourceId ? { ...s, name } : s)),
+    }))
+  }
+
   const updateSourceQAPairs = (sourceId: string, qaPairs: QAPair[]) => {
     setState((prev) => ({
       ...prev,
@@ -160,6 +169,7 @@ export function AgentCreationProvider({ children }: { children: ReactNode }) {
         setSelectedModel,
         setResponseMode,
         updateSourceStatus,
+        updateSourceName,
         updateSourceQAPairs,
         setTempAgentId,
         setAgentId,

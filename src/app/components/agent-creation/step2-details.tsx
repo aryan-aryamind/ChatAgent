@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router'
-import { useState, useEffect } from 'react'
-import { File, FileText, Link as LinkIcon, MessageSquare, BookOpen, Plus, Pencil, Check, X, Trash2, ArrowLeft, ArrowRight } from 'lucide-react'
+import { useRef, useState, useEffect } from 'react'
+import { File, FileText, Link as LinkIcon, MessageSquare, BookOpen, Plus, Pencil, Check, X, Trash2, ArrowLeft, ArrowRight, Upload } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Textarea } from '@/app/components/ui/textarea'
@@ -19,13 +19,33 @@ export function AgentCreationStep2() {
   const [qaPairs, setQAPairs] = useState<QAPair[]>([])
   const [currentQuestion, setCurrentQuestion] = useState('')
   const [currentAnswer, setCurrentAnswer] = useState('')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setSelectedFile(file)
+      if (!sourceName) {
+        setSourceName(file.name)
+      }
+    }
+  }
 
   const sourceTypes = [
     { type: 'file' as const, icon: File, label: 'File' },
-    { type: 'text' as const, icon: FileText, label: 'Text' },
-    { type: 'link' as const, icon: LinkIcon, label: 'Links' },
-    { type: 'qa' as const, icon: MessageSquare, label: 'Q&A' },
-    { type: 'notion' as const, icon: BookOpen, label: 'Notion' },
+    { type: 'text' as const, icon: FileText, label: 'Text', comingSoon: true },
+    { type: 'link' as const, icon: LinkIcon, label: 'Links', comingSoon: true },
+    { type: 'qa' as const, icon: MessageSquare, label: 'Q&A', comingSoon: true },
+    { type: 'notion' as const, icon: BookOpen, label: 'Notion', comingSoon: true },
   ]
 
   const handleAddQAPair = () => {
@@ -115,9 +135,10 @@ export function AgentCreationStep2() {
     const newSource: Source = {
       id: Date.now().toString(),
       type: sourceType,
-      name: trimmedName || `${sourceType} source`,
+      name: trimmedName || (sourceType === 'file' && selectedFile ? selectedFile.name : `${sourceType} source`),
       url: sourceType === 'link' ? trimmedUrl : undefined,
-      size: sourceType === 'file' ? '10 KB' : undefined,
+      size: sourceType === 'file' && selectedFile ? formatFileSize(selectedFile.size) : (sourceType === 'file' ? '10 KB' : undefined),
+      file: sourceType === 'file' && selectedFile ? selectedFile : undefined,
       status: 'pending',
     }
 
@@ -142,11 +163,11 @@ export function AgentCreationStep2() {
     if (!openDialogType) {
       setSourceUrl('')
       setSourceName('')
+      setSelectedFile(null)
     }
   }, [openDialogType])
 
   const handleBack = () => {
-    clearSources()
     setStep(1)
     router.push('/agents/new')
   }
@@ -167,7 +188,7 @@ export function AgentCreationStep2() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-4">Add training sources</h1>
           <p className="text-muted-foreground text-lg">
-            You can add multiple sources to train your Agent, let's start with a file or a link to your site.
+            You can add multiple sources to train your Agent, let's start with a file or some text.
           </p>
         </div>
 
@@ -212,11 +233,16 @@ export function AgentCreationStep2() {
                           setOpenDialogType(null)
                           setSourceUrl('')
                           setSourceName('')
+                          setSelectedFile(null)
                           if (source.type === 'qa') {
                             setQAPairs([])
                             setCurrentQuestion('')
                             setCurrentAnswer('')
                           }
+                          // Force dialog to remount with a fresh key
+                          setTimeout(() => {
+                            setDialogKey(prev => prev + 1)
+                          }, 50)
                         } else if (open && openDialogType !== source.type) {
                           // Dialog is opening
                           setOpenDialogType(source.type)
@@ -227,9 +253,13 @@ export function AgentCreationStep2() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setOpenDialogType(source.type)}
+                          onClick={() => !source.comingSoon && setOpenDialogType(source.type)}
+                          disabled={source.comingSoon}
+                          className={source.comingSoon ? "opacity-50 cursor-not-allowed" : ""}
                         >
-                          {existingSource ? (
+                          {source.comingSoon ? (
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Coming Soon</span>
+                          ) : existingSource ? (
                             <Pencil className="h-4 w-4" />
                           ) : (
                             <Plus className="h-4 w-4" />
@@ -369,6 +399,34 @@ export function AgentCreationStep2() {
                                 }}
                               />
                             </div>
+
+                            {source.type === 'file' && (
+                              <div className="space-y-2">
+                                <Label>Upload File</Label>
+                                <div
+                                  onClick={() => fileInputRef.current?.click()}
+                                  className="border-2 border-dashed border-border rounded-lg p-8 flex flex-col items-center justify-center gap-3 hover:bg-muted/50 cursor-pointer transition-colors"
+                                >
+                                  <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    className="hidden"
+                                    onChange={handleFileChange}
+                                    accept=".pdf,.doc,.docx,.txt"
+                                  />
+                                  <Upload className="h-8 w-8 text-muted-foreground" />
+                                  <div className="text-center">
+                                    <p className="font-medium">
+                                      {selectedFile ? selectedFile.name : 'Click to upload or drag and drop'}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {selectedFile ? formatFileSize(selectedFile.size) : 'PDF, DOC, DOCX, TXT (up to 10MB)'}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
                             {source.type === 'link' && (
                               <div>
                                 <Label htmlFor={`source-url-${source.type}`}>URL</Label>
@@ -385,17 +443,36 @@ export function AgentCreationStep2() {
                                 />
                               </div>
                             )}
-                            <Button
-                              onClick={(e) => handleAddSource(source.type, e)}
-                              className="w-full"
-                              disabled={
-                                (source.type === 'link' && !sourceUrl.trim()) ||
-                                !sourceName.trim()
-                              }
-                              type="button"
-                            >
-                              Add {source.label}
-                            </Button>
+
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={(e) => handleAddSource(source.type, e)}
+                                className="flex-1"
+                                disabled={
+                                  (source.type === 'link' && !sourceUrl.trim()) ||
+                                  (source.type === 'file' && !selectedFile) ||
+                                  !sourceName.trim()
+                                }
+                                type="button"
+                              >
+                                Add {source.label}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => {
+                                  setOpenDialogType(null)
+                                  setSourceUrl('')
+                                  setSourceName('')
+                                  setSelectedFile(null)
+                                  setTimeout(() => {
+                                    setDialogKey(prev => prev + 1)
+                                  }, 50)
+                                }}
+                                type="button"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
                           </div>
                         )}
                       </DialogContent>

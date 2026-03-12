@@ -3,6 +3,8 @@ import { PageHeader } from '../page-header';
 import { GradientButton } from '../gradient-button';
 import { StatCard } from '../stat-card';
 import { AgentCard } from '../agent-card';
+import { useSession } from 'next-auth/react';
+import { useAgents } from '@/contexts/AgentsContext';
 
 interface DashboardHomeProps {
   onNavigateToAgent: (agentId: string) => void;
@@ -10,62 +12,37 @@ interface DashboardHomeProps {
 }
 
 export function DashboardHome({ onNavigateToAgent, onCreateAgent }: DashboardHomeProps) {
-  const agents = [
-    {
-      id: '1',
-      name: 'Support Agent',
-      status: 'active' as const,
-      conversations: 245,
-      lastActive: '2 hours ago',
-    },
-    {
-      id: '2',
-      name: 'Sales Assistant',
-      status: 'active' as const,
-      conversations: 156,
-      lastActive: '5 hours ago',
-    },
-    {
-      id: '3',
-      name: 'FAQ Bot',
-      status: 'disabled' as const,
-      conversations: 0,
-      lastActive: 'Never',
-    },
-  ];
+  const { data: session } = useSession();
+  const { agents } = useAgents();
 
-  const recentActivity = [
+  const userName = session?.user?.name || 'there';
+
+  // Calculate dynamic stats
+  const totalConversations = agents.reduce((acc, agent) => acc + (agent.conversations || 0), 0);
+  const activeAgents = agents.filter(a => a.status === 'active').length;
+  const totalSources = agents.reduce((acc, agent) => acc + (agent.sources || 0), 0);
+
+  // Fake activity for UI (could be connected to a real activity API later)
+  const recentActivity = agents.length > 0 ? [
     {
       user: 'Sarah M.',
-      agent: 'Support Agent',
-      time: '5 minutes ago',
-      status: 'resolved',
-    },
-    {
-      user: 'John D.',
-      agent: 'Sales Assistant',
-      time: '12 minutes ago',
+      agent: agents[0].name,
+      time: 'Just now',
       status: 'active',
     },
     {
-      user: 'Emily R.',
-      agent: 'Support Agent',
-      time: '1 hour ago',
-      status: 'resolved',
-    },
-    {
-      user: 'Mike C.',
-      agent: 'Sales Assistant',
-      time: '2 hours ago',
-      status: 'escalated',
-    },
-  ];
+      user: 'John D.',
+      agent: agents[0].name,
+      time: '12 minutes ago',
+      status: 'active',
+    }
+  ] : [];
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
       <PageHeader
-        title="Welcome back, John!"
-        description="Here's what's happening with your chatbots today"
+        title={`Welcome back, ${userName}!`}
+        description={`Here's what's happening with your chatbots today`}
         action={
           <GradientButton onClick={onCreateAgent} className="gap-2">
             <Plus className="h-5 w-5" />
@@ -80,29 +57,29 @@ export function DashboardHome({ onNavigateToAgent, onCreateAgent }: DashboardHom
         <StatCard
           icon={Target}
           label="Total Conversations"
-          value="1,234"
-          change="+12%"
+          value={totalConversations.toLocaleString()}
+          change="+0%"
           trend="up"
         />
         <StatCard
           icon={Zap}
-          label="Avg Response Time"
-          value="2.3s"
-          change="-0.5s"
-          trend="down"
+          label="Active Agents"
+          value={activeAgents.toString()}
+          change="Live"
+          trend="up"
         />
         <StatCard
           icon={Smile}
-          label="Satisfaction Rate"
-          value="89%"
-          change="+3%"
+          label="Total Sources"
+          value={totalSources.toString()}
+          change="Indexed"
           trend="up"
         />
         <StatCard
           icon={Check}
-          label="Resolution Rate"
-          value="92%"
-          change="+2%"
+          label="Plan Status"
+          value={(session?.user as any)?.plan || 'FREE'}
+          change="Current"
           trend="up"
         />
       </div>
@@ -121,16 +98,22 @@ export function DashboardHome({ onNavigateToAgent, onCreateAgent }: DashboardHom
               Build a new AI chatbot in minutes
             </div>
           </button>
-          
+
           <button
-            onClick={() => onNavigateToAgent('1')}
+            onClick={() => {
+              if (agents.length > 0) {
+                onNavigateToAgent(agents[0].id);
+              } else {
+                onCreateAgent();
+              }
+            }}
             className="p-4 rounded-lg border border-border hover:border-border-emphasis transition-all bg-secondary hover:bg-bg-hover text-left group"
           >
             <MessageSquare className="h-6 w-6 text-primary mb-2 group-hover:scale-110 transition-transform" />
             <div className="font-medium mb-1">View Conversations</div>
             <div className="text-sm text-text-secondary">Check recent chat activity</div>
           </button>
-          
+
           <button className="p-4 rounded-lg border border-border hover:border-border-emphasis transition-all bg-secondary hover:bg-bg-hover text-left group">
             <TrendingUp className="h-6 w-6 text-primary mb-2 group-hover:scale-110 transition-transform" />
             <div className="font-medium mb-1">Check Analytics</div>
@@ -144,23 +127,42 @@ export function DashboardHome({ onNavigateToAgent, onCreateAgent }: DashboardHom
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-lg font-semibold">Your AI Agents</h3>
-            <p className="text-sm text-text-secondary">3 of 5 agents created</p>
+            <p className="text-sm text-text-secondary">
+              {agents.length} agent{agents.length !== 1 ? 's' : ''} created
+            </p>
           </div>
-          <button className="text-sm text-primary hover:underline">View All →</button>
+          {agents.length > 0 && <button className="text-sm text-primary hover:underline">View All →</button>}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {agents.map((agent) => (
-            <AgentCard
-              key={agent.id}
-              name={agent.name}
-              status={agent.status}
-              conversations={agent.conversations}
-              lastActive={agent.lastActive}
-              onClick={() => onNavigateToAgent(agent.id)}
-            />
-          ))}
-        </div>
+        {agents.length === 0 ? (
+          <div className="bg-secondary/30 border-2 border-dashed border-border rounded-xl p-12 text-center">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Zap className="h-8 w-8 text-primary" />
+            </div>
+            <h4 className="text-xl font-bold mb-2">No agents yet</h4>
+            <p className="text-text-secondary mb-6 max-w-sm mx-auto">
+              Create your first AI agent trained on your data and start automating your customer support.
+            </p>
+            <GradientButton onClick={onCreateAgent} className="gap-2">
+              <Plus className="h-5 w-5" />
+              Create My First Agent
+            </GradientButton>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {agents.map((agent) => (
+              <AgentCard
+                key={agent.id}
+                agentId={agent.id}
+                name={agent.name}
+                status={agent.status}
+                conversations={agent.conversations || 0}
+                lastActive="Just now"
+                onClick={() => onNavigateToAgent(agent.id)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Recent Activity */}
@@ -187,13 +189,12 @@ export function DashboardHome({ onNavigateToAgent, onCreateAgent }: DashboardHom
               </div>
               <div className="text-right">
                 <div
-                  className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                    activity.status === 'resolved'
-                      ? 'bg-success/10 text-success'
-                      : activity.status === 'active'
+                  className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${activity.status === 'resolved'
+                    ? 'bg-success/10 text-success'
+                    : activity.status === 'active'
                       ? 'bg-info/10 text-info'
                       : 'bg-warning/10 text-warning'
-                  }`}
+                    }`}
                 >
                   {activity.status}
                 </div>

@@ -78,19 +78,13 @@ model Agent {
   name            String
   websiteUrl      String?
   useCase         String?
-  responseMode    String?  @default("llm") // 'llm' | 'crewai'
-  model           String?
-  temperature     Float?
-  maxTokens       Int?
-  systemPrompt    String?  @db.Text
-  lastTrained     String?
   status          String   @default("active") // 'active' | 'disabled'
   conversations   Int      @default(0)
   sources         Int      @default(0)
   qaPairs         Json?    // Store Q&A pairs as JSON
-  crewaiSettings  Json?    // Store CrewAI settings as JSON
   image           String?
   expiresAt       DateTime?
+  initialMessage  String?  @db.Text
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

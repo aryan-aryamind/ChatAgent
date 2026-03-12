@@ -7,12 +7,13 @@ if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File as FastAPIFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uvicorn
 import logging
+import PyPDF2
 from agents.intent_classifier import IntentClassifierAgent
 from agents.qa_matcher import QAMatcherAgent
 from agents.response_generator import ResponseGeneratorAgent
@@ -928,6 +929,128 @@ async def scrape(request: ScrapeRequest):
         print(f"❌ Error in /scrape endpoint: {error_detail}")
         raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
 
+
+@app.post("/process-file")
+async def process_file(
+    file: UploadFile = FastAPIFile(...),
+    agent_id: Optional[str] = Form(None),
+    persona_type: Optional[str] = Form("general")
+):
+    """
+    Process an uploaded file (PDF or Text), extract content, and optionaly index it.
+    """
+    try:
+        content = ""
+        filename = file.filename
+        
+        # 1. Extract text based on file type
+        if filename.lower().endswith('.pdf'):
+            print(f"📄 Processing PDF file: {filename}")
+            pdf_reader = PyPDF2.PdfReader(file.file)
+            text_parts = []
+            for page in pdf_reader.pages:
+                text_parts.append(page.extract_text() or "")
+            content = "\n\n".join(text_parts)
+            
+            # Extract PDF Title from metadata
+            metadata = pdf_reader.metadata
+            if metadata and metadata.title:
+                pdf_metadata_title = metadata.title.strip()
+                # Check for generic titles
+                generic_titles = ["untitled document", "untitled", "none", "pdf", "document"]
+                if pdf_metadata_title.lower() not in generic_titles:
+                    display_title = pdf_metadata_title
+                else:
+                    display_title = filename
+            else:
+                display_title = filename
+        elif filename.lower().endswith(('.txt', '.md')):
+            print(f"📄 Processing text file: {filename}")
+            content = (await file.read()).decode('utf-8', errors='ignore')
+            display_title = filename
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file type. Only PDF and Text files are supported.")
+
+        if not content.strip():
+            raise HTTPException(status_code=400, detail="The file appears to be empty or contains no extractable text.")
+
+        # 2. Prepare response data (similar to scrape response)
+        response_data = {
+            "url": f"file://{filename}",
+            "title": display_title,
+            "content": content,
+            "headings": [], # File usually doesn't have structured headings like HTML
+            "pages": [
+                {
+                    "url": f"file://{filename}",
+                    "title": display_title,
+                    "content": content,
+                    "headings": [],
+                    "paragraphs": content.split('\n\n'),
+                    "images": [],
+                    "meta_description": f"Content from uploaded file: {filename}",
+                    "depth": 0,
+                }
+            ],
+            "metadata": {
+                "total_pages": 1,
+                "total_characters": len(content),
+                "scraped_at": datetime.now().isoformat(),
+                "errors": [],
+                "file_type": filename.split('.')[-1] if '.' in filename else 'unknown'
+            },
+            "stats": {
+                "total_pages": 1,
+                "total_characters": len(content),
+                "pages_scraped": 1,
+                "errors_count": 0,
+            },
+            "persona_type": persona_type or "general"
+        }
+
+        # 3. Extract Business Context
+        try:
+            temp_synthesizer = SynthesisAgent(llm_agent=llm_agent)
+            site_info = {
+                "url": f"file://{filename}",
+                "title": display_title,
+                "description": f"Uploaded file: {filename}"
+            }
+            extracted_context = temp_synthesizer.extract_business_context(content[:10000], site_info=site_info)
+            response_data["business_context"] = extracted_context
+            print(f"🏢 Extracted Business Context from file: {extracted_context}")
+        except Exception as e:
+            print(f"⚠️ Failed to extract business context from file: {e}")
+            response_data["business_context"] = f"AI Assistant for document: {display_title}"
+
+        # 4. Save and Index
+        if agent_id:
+            try:
+                content_storage.save_content(agent_id, response_data)
+                print(f"💾 Saved file content for agent: {agent_id}")
+                
+                # Index into RAG
+                print(f"🔄 Indexing file content into RAG vector store...")
+                rag_agent = RAGAgent(agent_id=agent_id, llm_agent=llm_agent)
+                
+                # Clear old index
+                rag_agent.doc_store.delete_index()
+                
+                indexing_stats = rag_agent.index_content(response_data["pages"])
+                print(f"✅ RAG indexing complete for file: {indexing_stats['chunks_indexed']} chunks indexed")
+            except Exception as e:
+                print(f"⚠️ Failed to save/index file content: {e}")
+
+        return {
+            "success": True,
+            "data": response_data
+        }
+
+    except Exception as e:
+        import traceback
+        error_detail = f"{str(e)}\n{traceback.format_exc()}"
+        print(f"❌ Error in /process-file endpoint: {error_detail}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 async def health():

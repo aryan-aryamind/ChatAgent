@@ -69,30 +69,32 @@ class QAMatcherAgent:
                         continue # Skip semantic search for this one if exact match found
                 
                 # If we don't have enough exact matches, use semantic similarity
-                message_embedding = self.model.encode([message], convert_to_numpy=True)
-                for qa in relevant_pairs:
-                    if not qa.get('question'):
-                        continue
+                valid_pairs = [qa for qa in relevant_pairs if qa.get('question')]
+                questions_to_encode = [qa['question'] for qa in valid_pairs 
+                                      if not any(m['qa'] == qa and m['score'] == 1.0 for m in matches_with_scores)]
+                
+                if questions_to_encode:
+                    message_embedding = self.model.encode([message], convert_to_numpy=True)[0]
+                    question_embeddings = self.model.encode(questions_to_encode, convert_to_numpy=True)
                     
-                    # Skip if already added as exact match
-                    if any(m['qa'] == qa and m['score'] == 1.0 for m in matches_with_scores):
-                        continue
+                    e_idx = 0
+                    for qa in valid_pairs:
+                        if any(m['qa'] == qa and m['score'] == 1.0 for m in matches_with_scores):
+                            continue
                         
-                    question_embedding = self.model.encode([qa['question']], convert_to_numpy=True)
-                    
-                    # Calculate cosine similarity
-                    dot_product = np.dot(message_embedding[0], question_embedding[0])
-                    norm_product = np.linalg.norm(message_embedding[0]) * np.linalg.norm(question_embedding[0])
-                    
-                    if norm_product > 0:
-                        similarity = dot_product / norm_product
-                    else:
-                        similarity = 0.0
-                    
-                    matches_with_scores.append({
-                        'qa': qa,
-                        'score': similarity
-                    })
+                        question_emb = question_embeddings[e_idx]
+                        e_idx += 1
+                        
+                        # Calculate cosine similarity
+                        dot_product = np.dot(message_embedding, question_emb)
+                        norm_product = np.linalg.norm(message_embedding) * np.linalg.norm(question_emb)
+                        
+                        similarity = dot_product / norm_product if norm_product > 0 else 0.0
+                        
+                        matches_with_scores.append({
+                            'qa': qa,
+                            'score': similarity
+                        })
             except Exception as e:
                 print(f"Error in semantic matching: {e}")
                 import traceback

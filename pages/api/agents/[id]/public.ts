@@ -19,6 +19,7 @@ export default async function handler(
                 name: true,
                 status: true,
                 expiresAt: true,
+                initialMessage: true,
             },
         })
 

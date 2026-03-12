@@ -33,20 +33,20 @@ add_action('admin_menu', 'ai_agent_register_settings');
  */
 function ai_agent_init_settings() {
     register_setting(
-    'ai_agent_group',
-    'ai_agent_id',
-    array(
-        'sanitize_callback' => 'sanitize_text_field'
-    )
-);
+        'ai_agent_group',
+        'ai_agent_id',
+        array(
+            'sanitize_callback' => 'sanitize_text_field'
+        )
+    );
 
-register_setting(
-    'ai_agent_group',
-    'ai_agent_base_url',
-    array(
-        'sanitize_callback' => 'esc_url_raw'
-    )
-);
+    register_setting(
+        'ai_agent_group',
+        'ai_agent_base_url',
+        array(
+            'sanitize_callback' => 'esc_url_raw'
+        )
+    );
 }
 add_action('admin_init', 'ai_agent_init_settings');
 
@@ -54,48 +54,91 @@ add_action('admin_init', 'ai_agent_init_settings');
  * Settings Page HTML
  */
 function ai_agent_settings_page_html() {
+    // Current options
+    $agent_id = get_option('ai_agent_id');
+    $base_url = get_option('ai_agent_base_url', 'https://unchaste-indignant-conception.ngrok-free.dev');
+    $embed_url = rtrim($base_url, '/') . '/chatbot/' . ($agent_id ?: 'your-agent-id');
     ?>
     <div class="wrap">
         <h1>AI Agent Chatbot Settings</h1>
-        <form action="options.php" method="post">
-            <?php
-            settings_fields('ai_agent_group');
-            do_settings_sections('ai_agent_group');
-            ?>
+        
+        <?php settings_errors(); ?>
+
+        <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px; margin-top: 20px;">
+            <form action="options.php" method="post">
+                <?php
+                settings_fields('ai_agent_group');
+                do_settings_sections('ai_agent_group');
+                ?>
+                <table class="form-table">
+                    <tr valign="top">
+                        <th scope="row">Agent ID</th>
+                        <td>
+                            <input type="text" name="ai_agent_id" value="<?php echo esc_attr($agent_id); ?>" class="regular-text" placeholder="e.g. cmmj2xtti00057pugq3ph8r30" />
+                            <p class="description">Copy this from your AI Agent dashboard.</p>
+                        </td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row">Bot Base URL</th>
+                        <td>
+                            <input type="text" name="ai_agent_base_url" value="<?php echo esc_attr($base_url); ?>" class="regular-text" placeholder="https://your-site.com" />
+                            <p class="description">The base URL where your chatbot is hosted. Do NOT include <code>/chatbot</code> in the URL.</p>
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button(); ?>
+            </form>
+        </div>
+
+        <div style="margin-top: 30px; background: #f0f0f1; padding: 20px; border-left: 4px solid #6366f1;">
+            <h2 style="margin-top: 0;">How to use</h2>
+            <p><strong>Option 1: Automatic Widget (Default)</strong></p>
+            <p>The chatbot widget will automatically appear in the bottom-right corner of your entire website.</p>
+            
+            <p><strong>Option 2: Shortcode</strong></p>
+            <p>If you want to place the chatbot manually on a specific page, use the following shortcode:</p>
+            <code>[ai_agent_chatbot]</code>
+        </div>
+
+        <div style="margin-top: 20px; color: #666; font-size: 13px;">
+            <p><strong>Note:</strong> If you've just updated the Agent ID and it's not reflecting on your site, please <strong>clear your browser cache</strong> or any <strong>caching plugins</strong> (like WP Rocket, W3 Total Cache, etc.).</p>
+        </div>
+
+        <div style="margin-top: 30px; opacity: 0.7;">
+            <hr>
+            <h3>Debug Info</h3>
             <table class="form-table">
-                <tr valign="top">
-                    <th scope="row">Agent ID</th>
-                    <td>
-                        <input type="text" name="ai_agent_id" value="<?php echo esc_attr(get_option('ai_agent_id')); ?>" class="regular-text" placeholder="e.g. cmmj2xtti00057pugq3ph8r30" />
-                        <p class="description">Copy this from your AI Agent dashboard.</p>
-                    </td>
+                <tr>
+                    <th>Current Embed URL:</th>
+                    <td><code><?php echo esc_html($embed_url); ?></code></td>
                 </tr>
-                <tr valign="top">
-                    <th scope="row">Bot URL</th>
-                    <td>
-                        <input type="text" name="ai_agent_base_url" value="<?php echo esc_attr(get_option('ai_agent_base_url', 'https://unchaste-indignant-conception.ngrok-free.dev')); ?>" class="regular-text" placeholder="https://your-site.com" />
-                        <p class="description">The URL where your chatbot is hosted (e.g. your ngrok link).</p>
-                    </td>
+                <tr>
+                    <th>Agent ID:</th>
+                    <td><code><?php echo esc_html($agent_id ?: 'Not Set'); ?></code></td>
                 </tr>
             </table>
-            <?php submit_button(); ?>
-        </form>
+        </div>
     </div>
     <?php
 }
 
 /**
- * Frontend Chatbot Embed
+ * Get the chatbot HTML structure
  */
-function ai_agent_embed_chatbot() {
+function ai_agent_get_chatbot_html() {
     $agent_id = get_option('ai_agent_id');
     $base_url = rtrim(get_option('ai_agent_base_url'), '/');
 
     if (!$agent_id || !$base_url) {
-        return; // Don't show if not configured
+        return '<!-- AI Agent: Please configure Agent ID and Bot URL in settings -->';
     }
 
     $embed_url = $base_url . '/chatbot/' . $agent_id;
+    
+    // Add version to URL for cache busting
+    $embed_url = add_query_arg('v', time(), $embed_url);
+
+    ob_start();
     ?>
     <style>
         #ai-agent-chatbot-container {
@@ -174,7 +217,6 @@ function ai_agent_embed_chatbot() {
         }
     </style>
 
-    <!-- AI Agent Chatbot Debug: ID=<?php echo esc_html($agent_id); ?> -->
     <div id="ai-agent-chatbot-trigger">
         <svg class="icon-chat" viewBox="0 0 24 24">
             <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
@@ -186,7 +228,7 @@ function ai_agent_embed_chatbot() {
 
     <div id="ai-agent-chatbot-container">
         <iframe 
-            src="<?php echo esc_url($embed_url . '?v=' . time()); ?>" 
+            src="<?php echo esc_url($embed_url); ?>" 
             width="100%" 
             height="100%" 
             style="border:none;"
@@ -195,30 +237,53 @@ function ai_agent_embed_chatbot() {
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var trigger = document.getElementById('ai-agent-chatbot-trigger');
-            var container = document.getElementById('ai-agent-chatbot-container');
-            
-            trigger.onclick = function() {
-                var isActive = container.classList.contains('active');
+        (function() {
+            var initChatbot = function() {
+                var trigger = document.getElementById('ai-agent-chatbot-trigger');
+                var container = document.getElementById('ai-agent-chatbot-container');
+                if (!trigger || !container) return;
                 
-                if (!isActive) {
-                    container.style.display = 'block';
-                    setTimeout(function() {
-                        container.classList.add('active');
-                        trigger.classList.add('active');
-                    }, 10);
-                } else {
-                    container.classList.remove('active');
-                    trigger.classList.remove('active');
-                    setTimeout(function() {
-                        container.style.display = 'none';
-                    }, 300);
-                }
+                trigger.onclick = function() {
+                    var isActive = container.classList.contains('active');
+                    
+                    if (!isActive) {
+                        container.style.display = 'block';
+                        setTimeout(function() {
+                            container.classList.add('active');
+                            trigger.classList.add('active');
+                        }, 10);
+                    } else {
+                        container.classList.remove('active');
+                        trigger.classList.remove('active');
+                        setTimeout(function() {
+                            container.style.display = 'none';
+                        }, 300);
+                    }
+                };
             };
-        });
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initChatbot);
+            } else {
+                initChatbot();
+            }
+        })();
     </script>
     <?php
+    return ob_get_clean();
 }
 
+/**
+ * Frontend Chatbot Embed (Automatic)
+ */
+function ai_agent_embed_chatbot() {
+    echo ai_agent_get_chatbot_html();
+}
 add_action( 'wp_footer', 'ai_agent_embed_chatbot' );
+
+/**
+ * Shortcode implementation
+ */
+function ai_agent_shortcode() {
+    return ai_agent_get_chatbot_html();
+}
+add_shortcode('ai_agent_chatbot', 'ai_agent_shortcode');

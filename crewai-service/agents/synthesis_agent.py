@@ -246,7 +246,7 @@ No specific matches were found in the training data for this query.
             answer = re.sub(phrase + r'[:,\s]*', '', answer, flags=re.IGNORECASE)
 
         # Force a trim based on request type (sentence count is more reliable than line count)
-        is_elaboration_request = any(word in query.lower() for word in ["elaborate", "detail", "more info", "explain more", "why", "how", "cloberate", "claborate", "elaborate"])
+        is_elaboration_request = any(word in query.lower() for word in ["elaborate", "detail", "more info", "explain more", "why", "how", "claborate"])
         
         sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', answer_str) if s.strip()]
         max_sentences = 8 if is_elaboration_request else 4

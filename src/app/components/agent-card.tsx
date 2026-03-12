@@ -38,6 +38,7 @@ interface AgentCardProps {
   onDelete?: (agentId: string) => void;
   onStatusUpdate?: (agentId: string, newStatus: string) => void;
   onExtendExpiry?: (agentId: string) => void;
+  image?: string;
   className?: string;
 }
 
@@ -77,9 +78,10 @@ export function AgentCard({
   const handleConfirmDelete = () => {
     if (onDelete) {
       try {
+        // Close dialog first to ensure cleanup happens before unmount
+        setShowDeleteDialog(false);
         onDelete(agentId);
         toast.success("Agent deleted successfully");
-        setShowDeleteDialog(false);
       } catch (error) {
         console.error("Error deleting agent:", error);
         toast.error("Failed to delete agent");

@@ -23,7 +23,7 @@ You are an AI assistant for a professional company.
 
 ### Constraints
 1. **Output Format**: Return ONLY the lowercase intent name. No explanation, no punctuation.
-2. **Focus**: Only classify based on the message. Do not adoption other roles.
+2. **Focus**: Only classify based on the message. Do not adopt other roles.
 3. No Data Divulge: Never mention training data.
 """
 

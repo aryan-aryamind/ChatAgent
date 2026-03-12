@@ -21,19 +21,13 @@ export default async function handler(
             name,
             websiteUrl,
             useCase,
-            responseMode,
-            model,
-            temperature,
-            maxTokens,
-            systemPrompt,
-            lastTrained,
             status,
             conversations,
             sources,
             qaPairs,
-            crewaiSettings,
             expiresAt,
-            image
+            image,
+            initialMessage
         } = req.body
 
         const agent = await prisma.agent.create({
@@ -42,19 +36,13 @@ export default async function handler(
                 name,
                 websiteUrl,
                 useCase,
-                responseMode,
-                model,
-                temperature,
-                maxTokens,
-                systemPrompt,
-                lastTrained,
                 status: status || 'active',
                 conversations: conversations || 0,
                 sources: sources || 0,
                 qaPairs,
-                crewaiSettings,
                 expiresAt: expiresAt ? new Date(expiresAt) : null,
-                image
+                image,
+                initialMessage
             } as any
         })
 

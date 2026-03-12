@@ -15,20 +15,13 @@ export interface Agent {
   name: string
   websiteUrl?: string
   useCase?: string
-  responseMode?: 'llm' | 'crewai'
-  model?: string
-  temperature?: number
-  maxTokens?: number
-  systemPrompt?: string
-  lastTrained?: string
   status: 'active' | 'disabled' | 'hidden'
   conversations?: number
   sources?: number
   qaPairs?: QAPair[]
+  image?: string
   expiresAt?: string | null
-  crewaiSettings?: {
-    intentConfidence: number
-  }
+  initialMessage?: string
 }
 
 interface AgentsContextType {

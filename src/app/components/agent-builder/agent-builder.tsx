@@ -21,7 +21,7 @@ export function AgentBuilder({ agentId, onBack }: AgentBuilderProps) {
   const agent = agentId ? getAgent(agentId) : null;
   const [agentName, setAgentName] = useState(agent?.name || 'New Agent');
   const [isEditingName, setIsEditingName] = useState(false);
-  const [agentStatus, setAgentStatus] = useState<'active' | 'disabled'>(
+  const [agentStatus, setAgentStatus] = useState<'active' | 'disabled' | 'hidden'>(
     agent?.status || 'active'
   );
 
@@ -95,7 +95,7 @@ export function AgentBuilder({ agentId, onBack }: AgentBuilderProps) {
               }`}>
               <div className={`w-2 h-2 rounded-full ${agentStatus === 'active' ? 'bg-success' : 'bg-text-muted'
                 }`} />
-              {agentStatus === 'active' ? 'Active' : 'Disabled'}
+              {agentStatus === 'active' ? 'Active' : agentStatus === 'disabled' ? 'Disabled' : 'Hidden'}
             </div>
           </div>
         </div>
@@ -148,7 +148,12 @@ export function AgentBuilder({ agentId, onBack }: AgentBuilderProps) {
             <TabsContent value="settings" className="m-0 h-full">
               <SettingsTab
                 agentStatus={agentStatus}
-                onStatusChange={setAgentStatus}
+                onStatusChange={(status) => {
+                  setAgentStatus(status);
+                  if (agentId) {
+                    updateAgent(agentId, { status });
+                  }
+                }}
                 agentId={agentId || undefined}
               />
             </TabsContent>

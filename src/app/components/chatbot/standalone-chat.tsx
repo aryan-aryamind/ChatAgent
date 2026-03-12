@@ -209,7 +209,14 @@ export function StandaloneChat({ agentId, agentName = 'Assistant', initialMessag
                                                   prose-p:leading-relaxed prose-pre:bg-secondary/50 prose-pre:p-4
                                                   prose-a:text-primary prose-a:font-medium prose-a:underline-offset-4 hover:prose-a:underline
                                                   prose-strong:text-foreground prose-headings:text-foreground">
-                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                        <ReactMarkdown 
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                                a: ({ node, ...props }) => (
+                                                    <a {...props} target="_blank" rel="noopener noreferrer" />
+                                                )
+                                            }}
+                                        >
                                             {message.content}
                                         </ReactMarkdown>
                                     </div>

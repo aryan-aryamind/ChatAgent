@@ -9,6 +9,7 @@ import {
   Check,
 } from 'lucide-react';
 import { Button } from '../ui/button';
+import { cn } from '../ui/utils';
 import { GradientButton } from '../gradient-button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -87,23 +88,6 @@ export function DeployTab({ agentId }: DeployTabProps) {
       color: 'primary',
     },
     {
-      id: 'widget',
-      icon: Globe,
-      name: 'Chat Widget',
-      description: 'Add a floating chat widget to your website',
-      status: 'active',
-      color: 'primary',
-    },
-    {
-      id: 'fullpage',
-      icon: MessageSquare,
-      name: 'Help Page (Full Page Chat)',
-      description: 'Dedicated chat-style help page',
-      status: 'enabled',
-      url: `${baseUrl}/chatbot/${agentId || 'your-agent-id'}`,
-      color: 'primary',
-    },
-    {
       id: 'wordpress',
       icon: Globe,
       name: 'WordPress Plugin',
@@ -117,7 +101,7 @@ export function DeployTab({ agentId }: DeployTabProps) {
       icon: Globe,
       name: 'Shopify Store',
       description: 'Integrate the chatbot with your Shopify storefront',
-      status: 'not-connected',
+      status: 'coming-soon',
       color: 'success',
     },
     {
@@ -125,7 +109,7 @@ export function DeployTab({ agentId }: DeployTabProps) {
       icon: MessageSquare,
       name: 'WhatsApp',
       description: 'Connect your WhatsApp Business account',
-      status: 'not-connected',
+      status: 'coming-soon',
       color: 'success',
     },
     {
@@ -133,33 +117,8 @@ export function DeployTab({ agentId }: DeployTabProps) {
       icon: MessageSquare,
       name: 'Facebook Messenger',
       description: 'Add chatbot to your Facebook page',
-      status: 'not-connected',
+      status: 'coming-soon',
       color: 'info',
-    },
-    {
-      id: 'instagram',
-      icon: MessageSquare,
-      name: 'Instagram DM',
-      description: 'Respond to Instagram direct messages',
-      status: 'not-connected',
-      color: 'warning',
-    },
-    {
-      id: 'slack',
-      icon: MessageSquare,
-      name: 'Slack',
-      description: 'Add bot to your Slack workspace',
-      status: 'not-connected',
-      color: 'primary',
-    },
-    {
-      id: 'api',
-      icon: Code,
-      name: 'API',
-      description: 'Integrate with custom applications',
-      status: 'enabled',
-      apiKey: 'cbsk_xxxxxxxxxxxxx',
-      color: 'muted',
     },
   ];
 
@@ -193,18 +152,36 @@ export function DeployTab({ agentId }: DeployTabProps) {
       <div className="space-y-4">
         {integrations.map((integration) => {
           const Icon = integration.icon;
+          const isComingSoon = integration.status === 'coming-soon';
           return (
             <div
               key={integration.id}
-              className="bg-card rounded-xl p-6 border border-border hover:border-border-emphasis transition-all"
+              className={cn(
+                "bg-card rounded-xl p-6 border border-border transition-all",
+                !isComingSoon && "hover:border-border-emphasis",
+                isComingSoon && "opacity-60 grayscale-[0.5]"
+              )}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-4 flex-1">
-                  <div className="p-3 rounded-lg bg-secondary">
-                    <Icon className="h-6 w-6 text-primary" />
+                  <div className={cn(
+                    "p-3 rounded-lg",
+                    isComingSoon ? "bg-muted" : "bg-secondary"
+                  )}>
+                    <Icon className={cn(
+                      "h-6 w-6",
+                      isComingSoon ? "text-text-muted" : "text-primary"
+                    )} />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold mb-1">{integration.name}</h3>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold">{integration.name}</h3>
+                      {isComingSoon && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                          Coming Soon
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-text-secondary mb-2">{integration.description}</p>
 
                     {integration.status === 'active' && (
@@ -227,35 +204,16 @@ export function DeployTab({ agentId }: DeployTabProps) {
                         </Button>
                       </div>
                     )}
-
-                    {integration.status === 'enabled' && integration.apiKey && (
-                      <div className="flex items-center gap-2 text-sm min-w-0">
-                        <span className="text-text-muted shrink-0">API Key:</span>
-                        <code className="px-2 py-1 rounded bg-secondary text-xs truncate font-mono">
-                          {integration.apiKey}
-                        </code>
-                        <Button variant="ghost" size="sm" className="h-6 px-2 shrink-0" type="button">
-                          Show
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-6 px-2" type="button">
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-
-                    {integration.status === 'not-connected' && (
-                      <div className="text-sm text-text-muted">Not Connected</div>
-                    )}
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {integration.status === 'active' || integration.status === 'enabled' ? (
+                  {!isComingSoon ? (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        if (integration.id === 'widget' || integration.id === 'iframe') {
+                        if (integration.id === 'iframe') {
                           setShowWidgetConfig(true);
                         } else if (integration.id === 'wordpress') {
                           setShowWordPressConfig(true);
@@ -264,20 +222,13 @@ export function DeployTab({ agentId }: DeployTabProps) {
                       className="bg-transparent"
                       type="button"
                     >
-                      {integration.id === 'api' ? (
-                        <>
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          View Docs
-                        </>
-                      ) : (
-                        <>
-                          <SettingsIcon className="h-4 w-4 mr-2" />
-                          Configure
-                        </>
-                      )}
+                      <SettingsIcon className="h-4 w-4 mr-2" />
+                      Configure
                     </Button>
                   ) : (
-                    <GradientButton size="sm" type="button">Connect</GradientButton>
+                    <Button variant="ghost" size="sm" disabled className="cursor-not-allowed">
+                      Coming Soon
+                    </Button>
                   )}
                 </div>
               </div>
@@ -374,7 +325,7 @@ export function DeployTab({ agentId }: DeployTabProps) {
                       </p>
                     </div>
 
-                    <div>
+                    {/* <div>
                       <h4 className="font-semibold mb-3">Quick Integrations</h4>
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
                         {['WordPress', 'Shopify', 'Wix', 'Webflow', 'Bubble'].map((platform) => (
@@ -383,7 +334,7 @@ export function DeployTab({ agentId }: DeployTabProps) {
                           </Button>
                         ))}
                       </div>
-                    </div>
+                    </div> */}
                   </TabsContent>
 
                   <TabsContent value="general" className="space-y-4">

@@ -6,7 +6,7 @@ import { useAgentCreation } from '@/contexts/AgentCreationContext'
 
 export function AgentCreationStep3() {
   const router = useRouter()
-  const { state, updateSourceStatus, updateSourceQAPairs, setStep, clearSources, setTempAgentId } = useAgentCreation()
+  const { state, updateSourceStatus, updateSourceName, updateSourceQAPairs, setStep, clearSources, setTempAgentId } = useAgentCreation()
   const [isProcessing, setIsProcessing] = useState(true)
   const [hasProcessed, setHasProcessed] = useState(false)
   const [processingSources, setProcessingSources] = useState<Set<string>>(new Set())
@@ -70,7 +70,16 @@ export function AgentCreationStep3() {
                   setTempAgentId(data.data.tempAgentId)
                 }
 
-                // Update source with scraped data
+                // Update source with scraped data and title
+                if (data.data?.title) {
+                  const backendTitle = data.data.title;
+                  const genericTitles = ["Scraped Website", "Untitled", "None", "Website"];
+                  if (!genericTitles.includes(backendTitle)) {
+                    console.log(`Updating source name from "${source.name}" to "${backendTitle}"`);
+                    updateSourceName(source.id, backendTitle);
+                  }
+                }
+
                 if (data.data?.qaPairs && data.data.qaPairs.length > 0) {
                   updateSourceQAPairs(source.id, data.data.qaPairs)
                   updateSourceStatus(source.id, 'completed')
@@ -96,6 +105,67 @@ export function AgentCreationStep3() {
               }
             } catch (error: any) {
               console.error('Error scraping URL:', error)
+              updateSourceStatus(source.id, 'error')
+              setProcessingSources(prev => {
+                const next = new Set(prev)
+                next.delete(source.id)
+                return next
+              })
+            }
+          } else if (source.type === 'file' && source.file) {
+            // If it's a file source, upload and process it
+            try {
+              console.log(`Uploading and processing file: ${source.name}`)
+              const formData = new FormData()
+              formData.append('file', source.file)
+              formData.append('persona_type', state.details?.useCase || 'general')
+
+              const response = await fetch(`/api/agents/new/upload`, {
+                method: 'POST',
+                body: formData,
+              })
+
+              if (response.ok) {
+                const data = await response.json()
+                // Update source with backend title if it's not generic
+                if (data.data?.title) {
+                  const backendTitle = data.data.title;
+                  const genericTitles = ["Untitled document", "Untitled", "None", "PDF", "Document"];
+                  if (!genericTitles.includes(backendTitle)) {
+                    console.log(`Updating source name from "${source.name}" to "${backendTitle}"`);
+                    updateSourceName(source.id, backendTitle);
+                  }
+                }
+
+                // Save temp agent ID if available
+                if (data.data?.tempAgentId) {
+                  setTempAgentId(data.data.tempAgentId)
+                }
+
+                // Update source with generated data (if any)
+                if (data.data?.qaPairs && data.data.qaPairs.length > 0) {
+                  updateSourceQAPairs(source.id, data.data.qaPairs)
+                }
+                
+                updateSourceStatus(source.id, 'completed')
+                
+                setProcessingSources(prev => {
+                  const next = new Set(prev)
+                  next.delete(source.id)
+                  return next
+                })
+              } else {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+                console.error('File processing failed:', errorData)
+                updateSourceStatus(source.id, 'error')
+                setProcessingSources(prev => {
+                  const next = new Set(prev)
+                  next.delete(source.id)
+                  return next
+                })
+              }
+            } catch (error: any) {
+              console.error('Error processing file:', error)
               updateSourceStatus(source.id, 'error')
               setProcessingSources(prev => {
                 const next = new Set(prev)
@@ -129,7 +199,7 @@ export function AgentCreationStep3() {
 
     processSources()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Only run once on mount
+  }, [state.sources.length]) // Re-run if sources length changes (helps if context is slow to hydrate)
 
   const handleContinue = () => {
     setStep(4)
@@ -205,8 +275,7 @@ export function AgentCreationStep3() {
           <Button
             variant="outline"
             onClick={() => {
-              // Clear all sources when going back
-              clearSources()
+              // Don't clear sources, just go back to edit
               setStep(2)
               router.push('/agents/new/details')
             }}

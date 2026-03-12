@@ -109,7 +109,7 @@ export default function AgentsPage() {
         toast.error('Failed to delete agent')
       }
     } else {
-      deleteAgent(agentId)
+      await deleteAgent(agentId)
       if (router.pathname.startsWith('/agents/')) {
         router.push('/agents')
       }

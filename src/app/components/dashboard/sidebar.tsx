@@ -106,10 +106,15 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              className="w-full justify-between bg-sidebar-accent border-sidebar-border"
+              className="w-full justify-between bg-sidebar-accent border-sidebar-border h-auto py-2 px-3"
             >
-              <span className="break-words min-w-0">My Workspace</span>
-              <ChevronDown className="h-4 w-4 flex-shrink-0" />
+              <div className="flex flex-col items-start min-w-0">
+                <span className="text-[10px] font-medium text-text-muted uppercase tracking-wider">Workspace</span>
+                <span className="text-sm font-semibold truncate w-full">
+                  {user?.name ? `${user.name.split(' ')[0]}'s Space` : 'My Workspace'}
+                </span>
+              </div>
+              <ChevronDown className="h-4 w-4 flex-shrink-0 text-text-muted" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56" align="start">
@@ -165,6 +170,8 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
       </nav>
 
       {/* Usage stats */}
+      {/* Usage stats - Hidden for now as it's hardcoded */}
+      {/* 
       <div className="p-4 border-t border-sidebar-border">
         <div className="bg-sidebar-accent rounded-lg p-3 mb-3">
           <div className="text-xs text-text-muted mb-1">Credits</div>
@@ -179,6 +186,15 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
           Upgrade Plan
         </GradientButton>
       </div>
+      */}
+
+      {user?.plan === 'FREE' && (
+        <div className="p-4 border-t border-sidebar-border">
+          <GradientButton size="sm" className="w-full" onClick={() => onNavigate('billing')}>
+            Upgrade Plan
+          </GradientButton>
+        </div>
+      )}
 
       {/* User profile */}
       <div className="p-4 border-t border-sidebar-border">

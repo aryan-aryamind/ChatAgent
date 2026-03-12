@@ -88,6 +88,7 @@ export default function ChatbotEmbedPage() {
             <StandaloneChat
                 agentId={agentId}
                 agentName={agent?.name || 'Assistant'}
+                initialMessage={agent?.initialMessage}
             />
         </>
     );

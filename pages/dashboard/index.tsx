@@ -27,11 +27,11 @@ export default function DashboardPage() {
 
   return (
     <div className="flex h-screen bg-background">
-      <Sidebar 
-        currentPage="dashboard" 
-        onNavigate={handleNavigate} 
+      <Sidebar
+        currentPage="dashboard"
+        onNavigate={handleNavigate}
       />
-      
+
       <main className="flex-1 ml-60 overflow-hidden">
         <DashboardHome
           onNavigateToAgent={handleNavigateToAgent}

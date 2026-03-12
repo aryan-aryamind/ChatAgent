@@ -129,3 +129,5 @@ assets/
 
 # Cursor project specific
 .cursor/
+# Backups
+/backups/

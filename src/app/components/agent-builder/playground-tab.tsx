@@ -71,7 +71,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
       {
         id: '1',
         role: 'assistant',
-        content: 'Hello! How can I help you today?',
+        content: agent?.initialMessage || 'Hello! How can I help you today?',
         confidence: 100,
         timestamp: Date.now(),
       },
@@ -80,16 +80,10 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedPersona, setSelectedPersona] = useState(agent?.useCase || 'general');
-  const [temperature, setTemperature] = useState([0.7]);
-  const [maxTokens, setMaxTokens] = useState([1000]);
-  const [instructions, setInstructions] = useState(
-    agent?.systemPrompt || 'You are a friendly customer support agent. Be helpful, professional, and concise. Always prioritize customer satisfaction.'
-  );
+  const [instructions, setInstructions] = useState(agent?.useCase || '');
   const [isFetchingSettings, setIsFetchingSettings] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [intentConfidence, setIntentConfidence] = useState<number[]>([
-    agent?.crewaiSettings?.intentConfidence || 0.8
-  ]);
+  const [intentConfidence, setIntentConfidence] = useState<number[]>([0.8]);
 
   // Fetch settings from backend if agentId is available
   useEffect(() => {
@@ -120,17 +114,10 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
 
   // Use second useEffect to keep instructions synced with agent prop if it changes
   useEffect(() => {
-    if (agent?.systemPrompt) {
-      setInstructions(agent.systemPrompt);
+    if (agent?.useCase) {
+      setInstructions(agent.useCase);
     }
-  }, [agent?.systemPrompt]);
-
-  // Update intent confidence when agent changes
-  useEffect(() => {
-    if (agent?.crewaiSettings?.intentConfidence !== undefined) {
-      setIntentConfidence([agent.crewaiSettings.intentConfidence]);
-    }
-  }, [agent?.crewaiSettings?.intentConfidence]);
+  }, [agent?.useCase]);
 
   // Sync messages with localStorage when agentId changes (for navigation)
   useEffect(() => {
@@ -145,6 +132,36 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
       }
     }
   }, [agentId]);
+
+  // Sync initial message with agent prop in real-time
+  useEffect(() => {
+    const newInitialMessage = agent?.initialMessage;
+    if (newInitialMessage) {
+      setMessages(prev => {
+        if (prev.length === 0) return prev;
+        
+        // If there's only one message and it's from the assistant, update it
+        if (prev.length === 1 && prev[0].role === 'assistant') {
+          return [{
+            ...prev[0],
+            content: newInitialMessage
+          }];
+        }
+        
+        // Find the first assistant message and update it if it's at the start
+        if (prev[0].role === 'assistant') {
+          const newMessages = [...prev];
+          newMessages[0] = {
+            ...newMessages[0],
+            content: newInitialMessage
+          };
+          return newMessages;
+        }
+        
+        return prev;
+      });
+    }
+  }, [agent?.initialMessage]);
 
   // Save messages to localStorage whenever they change
   useEffect(() => {
@@ -176,14 +193,6 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
 
   const handleIntentConfidenceChange = (value: number[]) => {
     setIntentConfidence(value);
-    // Update agent in context
-    if (agentId && agent) {
-      updateAgent(agentId, {
-        crewaiSettings: {
-          intentConfidence: value[0],
-        },
-      });
-    }
   };
 
   const handleSaveSettings = async () => {
@@ -196,16 +205,17 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          agent_id: agentId,
-          persona_type: selectedPersona,
-          system_prompt: instructions
+          agentId: agentId,
+          details: {
+            useCase: selectedPersona,
+            systemPrompt: instructions
+          }
         }),
       });
 
       if (response.ok) {
         updateAgent(agentId, {
-          systemPrompt: instructions,
-          useCase: selectedPersona
+          useCase: instructions
         });
         import('sonner').then(({ toast }) => toast.success('Agent settings saved successfully'));
       } else {
@@ -293,7 +303,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
           message: userMessage.content,
           responseMode: responseMode,
           qaPairs: agent?.qaPairs || [],
-          intentConfidence: agent?.crewaiSettings?.intentConfidence || 0.8,
+          intentConfidence: intentConfidence[0],
           history: messages.slice(-5).map(m => ({
             role: m.role,
             content: m.content
@@ -362,7 +372,7 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
       {
         id: '1',
         role: 'assistant',
-        content: 'Hello! How can I help you today?',
+        content: agent?.initialMessage || 'Hello! How can I help you today?',
         confidence: 100,
         timestamp: Date.now(),
       },
@@ -375,184 +385,50 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
       <div className="w-80 border-r border-border p-6 overflow-y-auto scrollbar-hide">
         <h3 className="font-semibold mb-4 scrollbar-hide">Configuration</h3>
 
-        {/* LLM Mode Settings */}
-        {responseMode === 'llm' && (
-          <>
-            {/* Persona Selection */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">Instructions</label>
-              <Select value={selectedPersona} onValueChange={setSelectedPersona}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="general">General (Balanced)</SelectItem>
-                  <SelectItem value="support">Customer Support (Empathetic)</SelectItem>
-                  <SelectItem value="sales">Sales (Goal-Oriented)</SelectItem>
-                </SelectContent>
-              </Select>
+        {/* Intent Confidence for RAG */}
+        <div className="space-y-6">
+          {/* Accuracy Section */}
+          <div className="bg-card border rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Target className="h-4 w-4 text-primary" />
+              <Label className="text-sm font-semibold">Accuracy</Label>
             </div>
-
-            {/* Temperature */}
-            {/* 
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium">Temperature</label>
-                <span className="text-sm text-text-muted">{temperature[0]}</span>
-              </div>
-              <Slider
-                value={temperature}
-                onValueChange={setTemperature}
-                min={0}
-                max={1}
-                step={0.1}
-                className="mb-1"
-              />
-              <div className="flex justify-between text-xs text-text-muted">
-                <span>Precise</span>
-                <span>Creative</span>
-              </div>
-            </div>
-            */}
-
-            {/* Max Tokens */}
-            {/* 
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium">Max Tokens</label>
-                <span className="text-sm text-text-muted">{maxTokens[0]}</span>
-              </div>
-              <Slider
-                value={maxTokens}
-                onValueChange={setMaxTokens}
-                min={100}
-                max={4000}
-                step={100}
-              />
-            </div>
-            */}
-
-            {/* Instructions */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">System Instructions(Prompt)</label>
-              <Textarea
-                value={instructions}
-                onChange={(e) => setInstructions(e.target.value)}
-                rows={6}
-                className="resize-none"
-                placeholder="Enter system instructions..."
-              />
-            </div>
-          </>
-        )}
-
-        {/* CrewAI Mode Settings */}
-        {responseMode === 'crewai' && (
-          <div className="space-y-6">
-            {/* Accuracy Section */}
-            <div className="bg-card border rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Target className="h-4 w-4 text-primary" />
-                <Label className="text-sm font-semibold">Accuracy</Label>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Intent Confidence</span>
-                  <span className="text-sm font-medium text-primary">
-                    {(intentConfidence[0] * 100).toFixed(0)}%
-                  </span>
-                </div>
-                <Slider
-                  value={intentConfidence}
-                  onValueChange={handleIntentConfidenceChange}
-                  min={0.5}
-                  max={1}
-                  step={0.05}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>50%</span>
-                  <span>100%</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Minimum confidence required for intent matching. Higher values mean more strict matching.
-                </p>
-              </div>
-            </div>
-
-            {/* Data Sources Section */}
-            <div className="bg-card border rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Database className="h-4 w-4 text-primary" />
-                <Label className="text-sm font-semibold">Data Sources</Label>
-              </div>
-              <div className="space-y-3">
-                {/* Q&A Pairs */}
-                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Brain className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium">Q&A Pairs</span>
-                  </div>
-                  <span className="text-sm font-semibold text-primary">
-                    {agent?.qaPairs?.length || 0}
-                  </span>
-                </div>
-
-                {/* Total Sources */}
-                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">Total Sources</span>
-                  </div>
-                  <span className="text-sm font-semibold">
-                    {agent?.sources || 0}
-                  </span>
-                </div>
-
-                {/* Q&A Pairs Preview */}
-                {agent?.qaPairs && agent.qaPairs.length > 0 && (
-                  <div className="mt-3 pt-3 border-t">
-                    <p className="text-xs text-muted-foreground mb-2">Sample Q&A Pairs:</p>
-                    <div className="space-y-2 max-h-32 overflow-y-auto">
-                      {agent.qaPairs.slice(0, 3).map((pair) => (
-                        <div key={pair.id} className="text-xs bg-muted/30 p-2 rounded">
-                          <p className="font-medium truncate">Q: {pair.question}</p>
-                          {pair.intent && (
-                            <p className="text-muted-foreground text-[10px] mt-1">
-                              Intent: {pair.intent}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                      {agent.qaPairs.length > 3 && (
-                        <p className="text-xs text-primary text-center">
-                          + {agent.qaPairs.length - 3} more pairs
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {(!agent?.qaPairs || agent.qaPairs.length === 0) && (
-                  <p className="text-xs text-warning text-center py-2">
-                    No Q&A pairs available. Add them in Data Sources tab.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Info Box */}
-            <div className="bg-primary/10 border border-primary/20 rounded-lg p-3">
-              <p className="text-xs text-primary flex items-start gap-2">
-                <Zap className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                <span>
-                  CrewAI matches user queries to Q&A pairs based on intent similarity.
-                  Configure advanced settings in the Settings tab.
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Intent Confidence</span>
+                <span className="text-sm font-medium text-primary">
+                  {(intentConfidence[0] * 100).toFixed(0)}%
                 </span>
+              </div>
+              <Slider
+                value={intentConfidence}
+                onValueChange={handleIntentConfidenceChange}
+                min={0.5}
+                max={1}
+                step={0.05}
+                className="w-full"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>50%</span>
+                <span>100%</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Minimum confidence required for intent matching. Higher values mean more strict matching.
               </p>
             </div>
           </div>
-        )}
+
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2">System Instructions(Prompt)</label>
+            <Textarea
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              rows={10}
+              className="resize-none"
+              placeholder="Enter system instructions..."
+            />
+          </div>
+        </div>
 
         <GradientButton
           className="w-full mt-6"
@@ -638,7 +514,14 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
                                   prose-p:leading-relaxed prose-pre:bg-muted prose-pre:p-0
                                   prose-a:text-blue-400 prose-a:underline hover:prose-a:text-blue-500
                                   prose-ul:list-disc prose-ul:ml-4 prose-ol:list-decimal prose-ol:ml-4">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          a: ({ node, ...props }) => (
+                            <a {...props} target="_blank" rel="noopener noreferrer" />
+                          )
+                        }}
+                      >
                         {message.content}
                       </ReactMarkdown>
                     </div>
