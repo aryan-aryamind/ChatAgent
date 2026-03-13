@@ -1,0 +1,6 @@
+﻿pages/api/debug-session.ts(3,29): error TS2307: Cannot find module '../auth/[...nextauth]' or its corresponding type declarations.
+src/lib/scraper/index.ts(1,23): error TS7016: Could not find a declaration file for module 'jsdom'. 'D:/Chatbase-Clone/node_modules/jsdom/lib/api.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/jsdom` if it exists or add a new declaration (.d.ts) file containing `declare module 'jsdom';`
+src/lib/scraper/index.ts(2,29): error TS7016: Could not find a declaration file for module 'turndown'. 'D:/Chatbase-Clone/node_modules/turndown/lib/turndown.cjs.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/turndown` if it exists or add a new declaration (.d.ts) file containing `declare module 'turndown';`
+src/lib/scraper/index.ts(5,16): error TS2665: Invalid module name in augmentation. Module 'turndown' resolves to an untyped module at 'D:/Chatbase-Clone/node_modules/turndown/lib/turndown.cjs.js', which cannot be augmented.

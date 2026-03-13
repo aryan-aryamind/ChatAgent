@@ -13,7 +13,7 @@ interface DashboardHomeProps {
 
 export function DashboardHome({ onNavigateToAgent, onCreateAgent }: DashboardHomeProps) {
   const { data: session } = useSession();
-  const { agents } = useAgents();
+  const { agents, isLoaded } = useAgents();
 
   const userName = session?.user?.name || 'there';
 
@@ -37,6 +37,66 @@ export function DashboardHome({ onNavigateToAgent, onCreateAgent }: DashboardHom
       status: 'active',
     }
   ] : [];
+
+  // AI Agents
+  const renderAgentsSection = () => {
+    if (!isLoaded) {
+      return (
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold mb-4">Your AI Agents</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-48 bg-secondary/30 rounded-xl" />
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold">Your AI Agents</h3>
+            <p className="text-sm text-text-secondary">
+              {agents.length} agent{agents.length !== 1 ? 's' : ''} created
+            </p>
+          </div>
+          {agents.length > 0 && <button className="text-sm text-primary hover:underline">View All →</button>}
+        </div>
+
+        {agents.length === 0 ? (
+          <div className="bg-secondary/30 border-2 border-dashed border-border rounded-xl p-12 text-center">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Zap className="h-8 w-8 text-primary" />
+            </div>
+            <h4 className="text-xl font-bold mb-2">No agents yet</h4>
+            <p className="text-text-secondary mb-6 max-w-sm mx-auto">
+              Create your first AI agent trained on your data and start automating your customer support.
+            </p>
+            <GradientButton onClick={onCreateAgent} className="gap-2">
+              <Plus className="h-5 w-5" />
+              Create My First Agent
+            </GradientButton>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {agents.map((agent) => (
+              <AgentCard
+                key={agent.id}
+                agentId={agent.id}
+                name={agent.name}
+                status={agent.status}
+                conversations={agent.conversations || 0}
+                lastActive="Just now"
+                onClick={() => onNavigateToAgent(agent.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full">
@@ -122,48 +182,7 @@ export function DashboardHome({ onNavigateToAgent, onCreateAgent }: DashboardHom
         </div>
       </div>
 
-      {/* AI Agents */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold">Your AI Agents</h3>
-            <p className="text-sm text-text-secondary">
-              {agents.length} agent{agents.length !== 1 ? 's' : ''} created
-            </p>
-          </div>
-          {agents.length > 0 && <button className="text-sm text-primary hover:underline">View All →</button>}
-        </div>
-
-        {agents.length === 0 ? (
-          <div className="bg-secondary/30 border-2 border-dashed border-border rounded-xl p-12 text-center">
-            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Zap className="h-8 w-8 text-primary" />
-            </div>
-            <h4 className="text-xl font-bold mb-2">No agents yet</h4>
-            <p className="text-text-secondary mb-6 max-w-sm mx-auto">
-              Create your first AI agent trained on your data and start automating your customer support.
-            </p>
-            <GradientButton onClick={onCreateAgent} className="gap-2">
-              <Plus className="h-5 w-5" />
-              Create My First Agent
-            </GradientButton>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {agents.map((agent) => (
-              <AgentCard
-                key={agent.id}
-                agentId={agent.id}
-                name={agent.name}
-                status={agent.status}
-                conversations={agent.conversations || 0}
-                lastActive="Just now"
-                onClick={() => onNavigateToAgent(agent.id)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      {renderAgentsSection()}
 
       {/* Recent Activity */}
       <div className="bg-card rounded-xl p-6 border border-border">

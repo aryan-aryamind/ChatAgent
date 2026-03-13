@@ -1,0 +1,100 @@
+{
+  "targetUser": [
+    {
+      "id": "cmmncf3qs000299wkvdra9gin",
+      "name": "Aryan Gajjar",
+      "email": "aryanaryamind@gmail.com",
+      "emailVerified": null,
+      "image": "https://lh3.googleusercontent.com/a/ACg8ocJA0KRCemoC8IpN5J6N1MotdkCS4fQA6dpDXXeKU2krsDsFt10=s96-c",
+      "password": null,
+      "role": "USER",
+      "plan": "FREE",
+      "createdAt": "2026-03-12T10:46:43.636Z",
+      "updatedAt": "2026-03-12T12:33:09.258Z",
+      "accounts": [
+        {
+          "id": "cmmncf3qw000499wkaqmljr1r",
+          "userId": "cmmncf3qs000299wkvdra9gin",
+          "type": "oauth",
+          "provider": "google",
+          "providerAccountId": "102891946089698503968",
+          "refresh_token": null,
+          "access_token": "ya29.A0ATkoCc7t0pxe4Fq685dX7O8Qip_24ON7cXJ19cZ8dJk2dEWRmD2hIywJ-E59YaHeZOCUjR2yC5gTwe0eHHMRWzJJsHGTkIs-QTXxrDww9NTQoGaxhP4QVbtQ3xJBxSxqOR_f6MhQHdHOBy0ePGAnwn32DZC1VvebOKzk5Ch9PvI7Fh-FYbfn4IPoB7hOlHf6hjYX6eRqvsyeYFG5siY1cmIVd893yeIPlq6OLl7wRRFY5H62CksnRNDbsaaLo_dnF8vvCBDkRD2v1JK73NG9HyJI1Ubpn8HnaCgYKASISARQSFQHGX2MilTQnd_GmWqbzhGr2F7XfDQ0295",
+          "expires_at": 1773316002,
+          "token_type": "Bearer",
+          "scope": "openid https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email",
+          "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjUzMDcyNGQ0OTE3M2EzZWQ2YjRhMDBhYTYzNDQyMDMwMGQ3MmFlNWIiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJhenAiOiI4NDcyMzcyOTcxMTQtcjdpOTVnZXEybThpY2g2NWxtcWdnNjFjN3BjZGlscGQuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJhdWQiOiI4NDcyMzcyOTcxMTQtcjdpOTVnZXEybThpY2g2NWxtcWdnNjFjN3BjZGlscGQuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJzdWIiOiIxMDI4OTE5NDYwODk2OTg1MDM5NjgiLCJlbWFpbCI6ImFyeWFuYXJ5YW1pbmRAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImF0X2hhc2giOiI3TVJFUG9IMTlvYi01SFM1aUxMMVpBIiwibmFtZSI6IkFyeWFuIEdhamphciIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NKQTBLUkNlbW9DOElwTjVKNk4xTW90ZGtDUzRmUUE2ZHBEWFhlS1Uya3JzRHNGdDEwPXM5Ni1jIiwiZ2l2ZW5fbmFtZSI6IkFyeWFuIiwiZmFtaWx5X25hbWUiOiJHYWpqYXIiLCJpYXQiOjE3NzMzMTI0MDIsImV4cCI6MTc3MzMxNjAwMn0.hvlGv-255uznCrfRUqCc8PI8izZhPtZs3ofG5sP50MRUydEo-v-bx4I8Mn_9nGSzDSnfISsYQGND-7mMhhSGGdVg2qc2aGasmKdy1hQxGHi8sbPUmcQg6aIBYqUowtZIJyQn7_GlWkfgNaXfmZKPoaj7TpdshWwI5DSFlLYiK6y1tlmVyeKFggNzc3Z9bcWOq5OmoCLUMsR49sgo9Ti5g6GyOeuRmYgboswl4FNBvvM9Wwr8v0cyHTNnvCa7c8iaw70paeunZKEKmksAFIVOqnplr83ZyOL7-RJ8KJ6H-uwV9QH94y3uuDhmaFmHQMjJoqP4TR2kDWc-x7lj9QCfUA",
+          "session_state": null
+        }
+      ],
+      "agents": [
+        {
+          "id": "cmmncgiy9000699wk6obg4wan",
+          "userId": "cmmncf3qs000299wkvdra9gin",
+          "name": "Be Honest",
+          "websiteUrl": "https://behonest.shwetatech.com/",
+          "useCase": "Business Context\n**Company Name:** Be Honest\n**Business Context:** Be Honest offers secure, private AI-powered mental health counseling through encrypted text conversations. Key features include personalized insights, professional-grade AI counseling, and a strong emphasis on privacy and trust. The platform provides a safe space for mental wellness, with no registration required, and end-to-end encryption for all interactions. Users can track their mood, set routines, and access breathing techniques to combat stress. Be Honest prioritizes user privacy, with no data collection or sharing, and offers a unique value proposition with its commitment to confidentiality and support.\n\nRole\n- Primary Function: You are an AI agent who helps users with their inquiries, issues and requests.\n- Objective: Provide short, simple, and helpful answers. Organise information clearly.\n- Tone: Professional, friendly, and concise. \n\nConstraints\n1. Brevity: Keep replies to 2-3 lines by default (max 5). \n2. Proactive: If needed, ask a single short follow-up question.\n3. No Meta-Commentary: Never mention \"snippets\" or \"data access\".\n4. Formatting: Use links sparingly and only when directly relevant or requested. Use `[Descriptive Label](URL)`.\n\n\nConversation History:\n{history_str}\n\nKnowledge Base Snippets:\n{context}",
+          "status": "active",
+          "conversations": 0,
+          "sources": 1,
+          "qaPairs": null,
+          "image": null,
+          "expiresAt": "2026-03-19T10:47:49.902Z",
+          "initialMessage": "Hey! I'm here to help. What can I do for you today? 👋",
+          "createdAt": "2026-03-12T10:47:50.001Z",
+          "updatedAt": "2026-03-12T10:48:44.978Z"
+        },
+        {
+          "id": "cmmnchgep000899wkc8xj55u9",
+          "userId": "cmmncf3qs000299wkvdra9gin",
+          "name": "Certificate of LLP Incorporation (1)",
+          "websiteUrl": null,
+          "useCase": "Business Context\n**Business Context:**\nShweta Technologies LLP, a Gujarat-based company, is officially incorporated with the Ministry of Corporate Affairs, Government of India. The company's mailing address is C-35, Tirupati Sahibaug, Village Panchot, Mehsana. As a Limited Liability Partnership (LLP), Shweta Technologies operates under the LLP Act, 2008, with a unique identification number. The company's incorporation details can be verified on the Ministry's website. **Key Services:** Business incorporation, regulatory compliance. **Value Propositions:** Government-recognized certification, digital verification process.\n\nRole\n- Primary Function: You are an AI agent who helps users with their inquiries, issues and requests.\n- Objective: Provide short, simple, and helpful answers. Organise information clearly.\n- Tone: Professional, friendly, and concise. \n\nConstraints\n1. Brevity: Keep replies to 2-3 lines by default (max 5). \n2. Proactive: If needed, ask a single short follow-up question.\n3. No Meta-Commentary: Never mention \"snippets\" or \"data access\".\n4. Formatting: Use links sparingly and only when directly relevant or requested. Use `[Descriptive Label](URL)`.\n\n\nConversation History:\n{history_str}\n\nKnowledge Base Snippets:\n{context}",
+          "status": "active",
+          "conversations": 0,
+          "sources": 1,
+          "qaPairs": null,
+          "image": null,
+          "expiresAt": "2026-03-19T10:48:33.342Z",
+          "initialMessage": "Hey! I'm here to help. What can I do for you today? 👋",
+          "createdAt": "2026-03-12T10:48:33.361Z",
+          "updatedAt": "2026-03-12T10:48:33.361Z"
+        },
+        {
+          "id": "cmmne5dtn0001i4leqv7u56se",
+          "userId": "cmmncf3qs000299wkvdra9gin",
+          "name": "Techify Hub",
+          "websiteUrl": "https://techifyhub.in/",
+          "useCase": "Business Context\n**Company Name:** Techify Hub\n\n**Business Context:** Techify Hub is an e-commerce platform offering a wide range of electronics and gadgets. Their product categories include refurbished laptops, home audio systems, keyboards, mouse and input devices, routers, and consumer electronics. They provide free delivery on orders over ₹499, 7-day returns, secure payment options, and 24/7 dedicated support. Additionally, they offer a gift service, making them a one-stop-shop for all electronic needs. With discounts on various products, Techify Hub aims to provide a seamless and secure shopping experience for its customers.\n\nRole\n- Primary Function: You are an AI agent who helps users with their inquiries, issues and requests.\n- Objective: Provide short, simple, and helpful answers. Organise information clearly.\n- Tone: Professional, friendly, and concise. \n\nConstraints\n1. Brevity: Keep replies to 2-3 lines by default (max 5). \n2. Proactive: If needed, ask a single short follow-up question.\n3. No Meta-Commentary: Never mention \"snippets\" or \"data access\".\n4. Formatting: Use links sparingly and only when directly relevant or requested. Use `[Descriptive Label](URL)`.\n\n\nConversation History:\n{history_str}\n\nKnowledge Base Snippets:\n{context}",
+          "status": "active",
+          "conversations": 0,
+          "sources": 1,
+          "qaPairs": null,
+          "image": null,
+          "expiresAt": "2026-03-19T11:35:09.232Z",
+          "initialMessage": "Hey! I'm here to help. What can I do for you today? 👋",
+          "createdAt": "2026-03-12T11:35:09.371Z",
+          "updatedAt": "2026-03-12T11:35:56.321Z"
+        }
+      ]
+    }
+  ],
+  "allAgentsCount": 3,
+  "allAgents": [
+    {
+      "id": "cmmnchgep000899wkc8xj55u9",
+      "name": "Certificate of LLP Incorporation (1)",
+      "userId": "cmmncf3qs000299wkvdra9gin"
+    },
+    {
+      "id": "cmmncgiy9000699wk6obg4wan",
+      "name": "Be Honest",
+      "userId": "cmmncf3qs000299wkvdra9gin"
+    },
+    {
+      "id": "cmmne5dtn0001i4leqv7u56se",
+      "name": "Techify Hub",
+      "userId": "cmmncf3qs000299wkvdra9gin"
+    }
+  ]
+}

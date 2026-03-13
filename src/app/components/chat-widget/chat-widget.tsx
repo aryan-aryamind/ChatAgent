@@ -4,6 +4,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { cn } from '../ui/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { useChat } from '@/contexts/ChatContext';
 
 interface Message {
   id: string;
@@ -13,7 +14,7 @@ interface Message {
 }
 
 export function ChatWidget() {
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen, setIsOpen } = useChat();
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -104,7 +105,7 @@ export function ChatWidget() {
             )}
           >
             {/* Header */}
-            <div className="bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] p-4 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] p-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold">
                   AI
@@ -134,9 +135,9 @@ export function ChatWidget() {
             </div>
 
             {!isMinimized && (
-              <>
+              <div className="flex flex-col h-[calc(100%-64px)] overflow-hidden">
                 {/* Messages */}
-                <div className="h-[460px] overflow-y-auto p-4 space-y-4 bg-background">
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-background scrollbar-hide">
                   {messages.map((message, index) => (
                     <div
                       key={message.id}
@@ -171,7 +172,7 @@ export function ChatWidget() {
                         <button
                           key={index}
                           onClick={() => handleSuggestedQuestion(question)}
-                          className="block w-full text-left px-4 py-2.5 rounded-xl bg-secondary hover:bg-bg-hover transition-colors text-sm"
+                          className="block w-full text-left px-4 py-2.5 rounded-xl bg-secondary hover:bg-bg-hover transition-colors text-sm border border-border/50"
                         >
                           {question}
                         </button>
@@ -209,7 +210,7 @@ export function ChatWidget() {
                 </div>
 
                 {/* Input */}
-                <div className="p-4 border-t border-border bg-card">
+                <div className="p-4 border-t border-border bg-card shrink-0">
                   <div className="flex gap-2">
                     <button className="p-2 hover:bg-secondary rounded-lg transition-colors">
                       <Paperclip className="h-5 w-5 text-text-muted" />
@@ -219,7 +220,7 @@ export function ChatWidget() {
                       onChange={(e) => setInput(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                       placeholder="Type your message..."
-                      className="flex-1"
+                      className="flex-1 bg-secondary/30"
                     />
                     <button
                       onClick={handleSend}
@@ -228,11 +229,11 @@ export function ChatWidget() {
                       <Send className="h-5 w-5 text-white" />
                     </button>
                   </div>
-                  <div className="text-xs text-text-muted text-center mt-2">
+                  <div className="text-[10px] text-text-muted/60 text-center mt-3 font-medium uppercase tracking-widest">
                     Powered by ChatbotAI
                   </div>
                 </div>
-              </>
+              </div>
             )}
           </motion.div>
         )}

@@ -7,7 +7,6 @@ import { Testimonials } from '@/app/components/landing/testimonials'
 import { Pricing } from '@/app/components/landing/pricing'
 import { CTA } from '@/app/components/landing/cta'
 import { Footer } from '@/app/components/landing/footer'
-import { ChatWidget } from '@/app/components/chat-widget/chat-widget'
 
 export default function Home() {
   const router = useRouter()
@@ -25,7 +24,6 @@ export default function Home() {
       <Pricing />
       <CTA />
       <Footer />
-      <ChatWidget />
     </div>
   )
 }

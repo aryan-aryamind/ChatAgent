@@ -1,0 +1,26 @@
+[
+  {
+    "id": "cmmncdnu20000lyihu8x4ugjx",
+    "name": "Super Admin",
+    "email": "admin@chatagent.com",
+    "emailVerified": null,
+    "image": null,
+    "password": "$2a$12$8tf06GjygI3O/Kgx4Q8oaeUOT8BthnV3SE6rVg04Xxxq6YcD3kpEm",
+    "role": "ADMIN",
+    "plan": "PREMIUM",
+    "createdAt": "2026-03-12T10:45:36.363Z",
+    "updatedAt": "2026-03-12T10:45:36.363Z"
+  },
+  {
+    "id": "cmmncf3qs000299wkvdra9gin",
+    "name": "Aryan Gajjar",
+    "email": "aryanaryamind@gmail.com",
+    "emailVerified": null,
+    "image": "https://lh3.googleusercontent.com/a/ACg8ocJA0KRCemoC8IpN5J6N1MotdkCS4fQA6dpDXXeKU2krsDsFt10=s96-c",
+    "password": null,
+    "role": "USER",
+    "plan": "FREE",
+    "createdAt": "2026-03-12T10:46:43.636Z",
+    "updatedAt": "2026-03-12T12:33:09.258Z"
+  }
+]

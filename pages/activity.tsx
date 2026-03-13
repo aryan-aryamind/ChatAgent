@@ -3,6 +3,7 @@ import { MessageSquare, Clock, User, CheckCircle2, XCircle, AlertCircle } from '
 import { Sidebar } from '@/app/components/dashboard/sidebar'
 import { PageHeader } from '@/app/components/page-header'
 import { useAgents } from '@/contexts/AgentsContext'
+import { ComingSoon } from '@/app/components/coming-soon'
 
 export default function ActivityPage() {
   const router = useRouter()
@@ -109,48 +110,10 @@ export default function ActivityPage() {
             description="View all conversations and interactions across your agents"
           />
 
-          <div className="mt-8 bg-card rounded-lg border">
-            <div className="p-6">
-              <div className="space-y-4">
-                {activities.map((activity) => (
-                  <div
-                    key={activity.id}
-                    className="flex items-start justify-between p-4 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border"
-                  >
-                    <div className="flex items-start gap-4 flex-1">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] flex items-center justify-center text-white text-sm font-semibold">
-                        {activity.user.charAt(0)}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium">{activity.user}</span>
-                          <span className="text-sm text-muted-foreground">•</span>
-                          <span className="text-sm text-muted-foreground">{activity.agent}</span>
-                        </div>
-                        <p className="text-sm text-foreground mb-2">{activity.message}</p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {activity.time}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${getStatusColor(activity.status)}`}>
-                        {getStatusIcon(activity.status)}
-                        <span className="capitalize">{activity.status}</span>
-                      </div>
-                      <button
-                        onClick={() => router.push(`/agents/${activity.agentId}`)}
-                        className="text-primary hover:underline text-sm"
-                      >
-                        View Agent
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <ComingSoon 
+            title="Activity Feed" 
+            description="Real-time monitoring of all agent conversations and system events is coming soon." 
+          />
         </div>
       </main>
     </div>

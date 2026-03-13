@@ -13,7 +13,11 @@ interface DataSource {
   addedDate: string;
 }
 
-export function DataSourcesTab() {
+interface DataSourcesTabProps {
+  agentId?: string;
+}
+
+export function DataSourcesTab({ agentId }: DataSourcesTabProps) {
   const [dataSources, setDataSources] = useState<DataSource[]>([
     {
       id: '1',

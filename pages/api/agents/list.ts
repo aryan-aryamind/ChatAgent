@@ -13,6 +13,7 @@ export default async function handler(
     }
 
     try {
+        console.log('Fetching agents for user ID:', (session.user as any).id);
         const agents = await prisma.agent.findMany({
             where: {
                 userId: (session.user as any).id
@@ -21,7 +22,7 @@ export default async function handler(
                 createdAt: 'desc'
             }
         })
-
+        console.log('Agents found in DB:', agents.length);
         return res.status(200).json(agents)
     } catch (error) {
         console.error('Error fetching user agents:', error)

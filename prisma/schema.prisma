@@ -85,6 +85,7 @@ model Agent {
   image           String?
   expiresAt       DateTime?
   initialMessage  String?  @db.Text
+  responseMode    String   @default("llm") // 'llm' | 'crewai'
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

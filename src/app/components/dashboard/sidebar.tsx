@@ -10,6 +10,7 @@ import {
   ChevronDown,
   Plus,
   Plug,
+  User,
 } from 'lucide-react';
 import { useRouter } from 'next/router';
 import { cn } from '../ui/utils';
@@ -31,19 +32,18 @@ interface SidebarProps {
 export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
   const router = useRouter();
   const { user, signOut } = useAuth();
-  
+
   const menuItems = [
     { id: 'dashboard', icon: Home, label: 'Dashboard' },
     { id: 'agents', icon: Bot, label: 'AI Agents' },
-    { id: 'activity', icon: MessageSquare, label: 'Activity' },
-    { id: 'analytics', icon: BarChart3, label: 'Analytics' },
-    { id: 'integrations', icon: Plug, label: 'Integrations' },
+    { id: 'activity', icon: MessageSquare, label: 'Activity', isComingSoon: true },
+    { id: 'analytics', icon: BarChart3, label: 'Analytics', isComingSoon: true },
   ];
 
   const settingsItems = [
     { id: 'settings', icon: Settings, label: 'Settings' },
     { id: 'billing', icon: CreditCard, label: 'Usage & Billing' },
-    { id: 'api-keys', icon: Key, label: 'API Keys' },
+    { id: 'api-keys', icon: Key, label: 'API Keys', isComingSoon: true },
     { id: 'help', icon: HelpCircle, label: 'Help & Docs' },
   ];
 
@@ -83,7 +83,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     <aside className="w-60 bg-sidebar border-r border-sidebar-border flex flex-col h-screen fixed left-0 top-0">
       {/* Logo */}
       <div className="p-4 border-b border-sidebar-border">
-        <div 
+        <div
           className="flex items-center gap-2 mb-4 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={handleLogoClick}
           role="button"
@@ -129,21 +129,28 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
       </div>
 
       {/* Main navigation */}
-      <nav className="flex-1 p-3 overflow-y-auto">
+      <nav className="flex-1 p-3 overflow-y-auto font-geist">
         <div className="space-y-1">
           {menuItems.map((item) => (
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
               className={cn(
-                'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                'w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                 currentPage === item.id
                   ? 'bg-sidebar-accent text-sidebar-accent-foreground border-l-2 border-primary'
                   : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
               )}
             >
-              <item.icon className="h-5 w-5 flex-shrink-0" />
-              <span>{item.label}</span>
+              <div className="flex items-center gap-3">
+                <item.icon className="h-5 w-5 flex-shrink-0" />
+                <span>{item.label}</span>
+              </div>
+              {item.isComingSoon && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  Soon
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -174,14 +181,32 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
       {/* 
       <div className="p-4 border-t border-sidebar-border">
         <div className="bg-sidebar-accent rounded-lg p-3 mb-3">
-          <div className="text-xs text-text-muted mb-1">Credits</div>
-          <div className="text-sm font-semibold mb-2">2,000 / 12,000</div>
-          <div className="w-full bg-sidebar-border rounded-full h-1.5 mb-2">
-            <div className="bg-primary h-1.5 rounded-full" style={{ width: '17%' }} />
+          <div className="mt-8">
+            <div className="bg-card rounded-xl border border-border p-12 text-center space-y-6">
+              <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <CreditCard className="h-8 w-8 text-primary" />
+              </div>
+              <div className="max-w-md mx-auto space-y-2">
+                <h3 className="text-2xl font-bold">Billing & Usage</h3>
+                <p className="text-muted-foreground">
+                  Our billing system is currently being updated to provide a better experience.
+                </p>
+              </div>
+              <div className="bg-secondary/50 rounded-lg p-6 max-w-lg mx-auto border border-border">
+                <p className="text-sm font-medium mb-2 uppercase tracking-wider text-text-muted">Contact Support</p>
+                <p className="text-lg">
+                  For billing inquiries, usage increases, or enterprise plans, please email us at:
+                </p>
+                <a 
+                  href="mailto:billing@chatbase.com" 
+                  className="text-xl font-bold text-primary hover:underline block mt-2"
+                >
+                  billing@chatbase.com
+                </a>
+              </div>
+            </div>
           </div>
-          <p className="text-xs text-text-muted">10,000 remaining</p>
         </div>
-
         <GradientButton size="sm" className="w-full">
           Upgrade Plan
         </GradientButton>
@@ -220,12 +245,6 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="min-w-[200px] max-w-[300px] w-auto" align="end">
-            <DropdownMenuItem onClick={() => onNavigate('profile')} className="whitespace-normal break-words">
-              Profile Settings
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onNavigate('team')} className="whitespace-normal break-words">
-              Team Members
-            </DropdownMenuItem>
             <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive whitespace-normal break-words">
               Logout
             </DropdownMenuItem>

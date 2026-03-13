@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { useSession } from 'next-auth/react'
 
 export interface QAPair {
   id: string
@@ -22,10 +23,12 @@ export interface Agent {
   image?: string
   expiresAt?: string | null
   initialMessage?: string
+  responseMode?: 'llm' | 'crewai'
 }
 
 interface AgentsContextType {
   agents: Agent[]
+  isLoaded: boolean
   addAgent: (agent: Agent) => void
   updateAgent: (id: string, updates: Partial<Agent>) => void
   deleteAgent: (id: string) => void
@@ -35,33 +38,50 @@ interface AgentsContextType {
 const AgentsContext = createContext<AgentsContextType | undefined>(undefined)
 
 export function AgentsProvider({ children }: { children: ReactNode }) {
+  const { data: session, status } = useSession()
   const [agents, setAgents] = useState<Agent[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
 
-  // 1. Load from DB on mount
+  // 1. Load from DB when authenticated
   useEffect(() => {
     const fetchAgents = async () => {
-      try {
-        const response = await fetch('/api/agents/list')
-        if (response.ok) {
-          const dbAgents = await response.json()
-          setAgents(dbAgents)
-
-          // Legacy cleanup: clear any old local storage data once successfully loaded from DB
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('chatbase_agents')
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching db agents:', error)
-      } finally {
+      // If unauthenticated, clear agents and mark as loaded
+      if (status === 'unauthenticated') {
+        setAgents([])
         setIsLoaded(true)
+        return
+      }
+
+      // If still loading session, don't fetch yet
+      if (status === 'loading') {
+        return
+      }
+
+      // If authenticated, fetch from DB
+      if (status === 'authenticated') {
+        try {
+          setIsLoaded(false)
+          const response = await fetch('/api/agents/list')
+          if (response.ok) {
+            const dbAgents = await response.json()
+            setAgents(dbAgents)
+
+            // Legacy cleanup: clear any old local storage data once successfully loaded from DB
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('chatbase_agents')
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching db agents:', error)
+        } finally {
+          setIsLoaded(true)
+        }
       }
     }
 
     fetchAgents()
-  }, [])
+  }, [session, status])
 
   const addAgent = async (agent: Agent) => {
     // Note: step4-model.tsx now calls /api/agents/create directly
@@ -122,6 +142,7 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
     <AgentsContext.Provider
       value={{
         agents,
+        isLoaded,
         addAgent,
         updateAgent,
         deleteAgent,

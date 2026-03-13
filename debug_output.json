@@ -1,0 +1,59 @@
+{
+  "users": [
+    {
+      "id": "cmmncdnu20000lyihu8x4ugjx",
+      "email": "admin@chatagent.com",
+      "name": "Super Admin"
+    },
+    {
+      "id": "cmmncf3qs000299wkvdra9gin",
+      "email": "aryanaryamind@gmail.com",
+      "name": "Aryan Gajjar"
+    }
+  ],
+  "agents": [
+    {
+      "id": "cmmnchgep000899wkc8xj55u9",
+      "name": "Certificate of LLP Incorporation (1)",
+      "userId": "cmmncf3qs000299wkvdra9gin",
+      "status": "active"
+    },
+    {
+      "id": "cmmncgiy9000699wk6obg4wan",
+      "name": "Be Honest",
+      "userId": "cmmncf3qs000299wkvdra9gin",
+      "status": "active"
+    },
+    {
+      "id": "cmmne5dtn0001i4leqv7u56se",
+      "name": "Techify Hub",
+      "userId": "cmmncf3qs000299wkvdra9gin",
+      "status": "active"
+    }
+  ],
+  "targetUser": {
+    "id": "cmmncf3qs000299wkvdra9gin",
+    "email": "aryanaryamind@gmail.com",
+    "name": "Aryan Gajjar"
+  },
+  "userAgents": [
+    {
+      "id": "cmmnchgep000899wkc8xj55u9",
+      "name": "Certificate of LLP Incorporation (1)",
+      "userId": "cmmncf3qs000299wkvdra9gin",
+      "status": "active"
+    },
+    {
+      "id": "cmmncgiy9000699wk6obg4wan",
+      "name": "Be Honest",
+      "userId": "cmmncf3qs000299wkvdra9gin",
+      "status": "active"
+    },
+    {
+      "id": "cmmne5dtn0001i4leqv7u56se",
+      "name": "Techify Hub",
+      "userId": "cmmncf3qs000299wkvdra9gin",
+      "status": "active"
+    }
+  ]
+}

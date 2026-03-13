@@ -63,41 +63,54 @@ export default function ApiKeysPage() {
             }
           />
 
-          <div className="mt-8 space-y-4">
-            {apiKeys.map((apiKey) => (
-              <div key={apiKey.id} className="bg-card rounded-lg border p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Key className="h-5 w-5 text-muted-foreground" />
-                      <h3 className="font-semibold">{apiKey.name}</h3>
-                    </div>
-                    <div className="flex items-center gap-2 mb-4">
-                      <Input
-                        value={apiKey.key}
-                        readOnly
-                        className="font-mono text-sm"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleCopy(apiKey.key)}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <span>Created: {apiKey.created}</span>
-                      <span>•</span>
-                      <span>Last used: {apiKey.lastUsed}</span>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+          <div className="mt-8 relative">
+            {/* Coming Soon Overlay */}
+            <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-[2px] rounded-lg flex flex-col items-center justify-center p-8 text-center border-2 border-dashed border-primary/20">
+              <div className="bg-primary/10 p-4 rounded-full mb-4">
+                <Key className="h-10 w-10 text-primary" />
               </div>
-            ))}
+              <h3 className="text-2xl font-bold mb-2">API Access Coming Soon</h3>
+              <p className="text-muted-foreground max-w-md">
+                We're currently finalizing our public API. Programmatic access to your agents will be available in the next major update.
+              </p>
+            </div>
+
+            <div className="space-y-4 opacity-40 select-none grayscale-[0.5]">
+              {apiKeys.map((apiKey) => (
+                <div key={apiKey.id} className="bg-card rounded-lg border p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <Key className="h-5 w-5 text-muted-foreground" />
+                        <h3 className="font-semibold">{apiKey.name}</h3>
+                      </div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <Input
+                          value={apiKey.key}
+                          readOnly
+                          className="font-mono text-sm"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span>Created: {apiKey.created}</span>
+                        <span>•</span>
+                        <span>Last used: {apiKey.lastUsed}</span>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" className="text-destructive" disabled>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="mt-8 bg-card rounded-lg border p-6">

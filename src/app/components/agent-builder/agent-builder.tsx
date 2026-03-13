@@ -32,16 +32,9 @@ export function AgentBuilder({ agentId, onBack }: AgentBuilderProps) {
     }
   }, [agent]);
 
-  const handleNameChange = (newName: string) => {
-    setAgentName(newName);
-    if (agentId && newName.trim()) {
-      updateAgent(agentId, { name: newName.trim() });
-    }
-  };
-
   const handleNameBlur = () => {
     setIsEditingName(false);
-    if (agentId && agentName.trim()) {
+    if (agentId && agentName.trim() && agentName !== agent?.name) {
       updateAgent(agentId, { name: agentName.trim() });
     }
   };
@@ -120,25 +113,25 @@ export function AgentBuilder({ agentId, onBack }: AgentBuilderProps) {
             <TabsContent value="playground" className="m-0 h-full">
               <PlaygroundTab
                 agentId={agentId || undefined}
-                responseMode={agent?.responseMode || 'llm'}
+                responseMode={(agent as any)?.responseMode || 'llm'}
                 agent={agent || undefined}
               />
             </TabsContent>
 
             <TabsContent value="data-sources" className="m-0 h-full">
-              <DataSourcesTab />
+              <DataSourcesTab agentId={agentId || undefined} />
             </TabsContent>
 
             <TabsContent value="actions" className="m-0 h-full">
-              <ActionsTab />
+              <ActionsTab agentId={agentId || undefined} />
             </TabsContent>
 
             <TabsContent value="analytics" className="m-0 h-full">
-              <AnalyticsTab />
+              <AnalyticsTab agentId={agentId || undefined} />
             </TabsContent>
 
             <TabsContent value="activity" className="m-0 h-full">
-              <ActivityTab />
+              <ActivityTab agentId={agentId || undefined} />
             </TabsContent>
 
             <TabsContent value="deploy" className="m-0 h-full">

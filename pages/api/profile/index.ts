@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../auth/[...nextauth]'
 import { prisma } from '@/lib/prisma'
+import bcrypt from 'bcryptjs'
 
 export default async function handler(
   req: NextApiRequest,
@@ -53,14 +54,19 @@ export default async function handler(
 
   if (req.method === 'PUT') {
     try {
-      const { name, image } = req.body
+      const { name, image, password } = req.body
+
+      const updateData: any = {}
+      if (name !== undefined) updateData.name = name
+      if (image !== undefined) updateData.image = image
+      
+      if (password !== undefined && password !== '') {
+        updateData.password = await bcrypt.hash(password, 12)
+      }
 
       const updatedUser = await prisma.user.update({
         where: { id: userId },
-        data: {
-          ...(name !== undefined && { name }),
-          ...(image !== undefined && { image }),
-        },
+        data: updateData,
         select: {
           id: true,
           name: true,

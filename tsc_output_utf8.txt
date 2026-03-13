@@ -1,0 +1,1 @@
+﻿src/app/components/dashboard/dashboard-home.tsx(7,27): error TS2307: Cannot find module '@/contexts/AgentsContext' or its corresponding type declarations.
