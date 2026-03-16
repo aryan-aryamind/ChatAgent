@@ -2,7 +2,7 @@ import { Providers } from './providers'
 import '@/styles/index.css'
 
 export const metadata = {
-  title: 'Admin Dashboard',
+  title: 'Dashboard',
   description: 'Manage your chatbots',
 }
 
