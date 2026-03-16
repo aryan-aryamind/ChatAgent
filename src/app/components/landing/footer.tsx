@@ -14,7 +14,7 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-8 mb-8">
           {/* Brand */}
           <div className="md:col-span-2">
-            <div 
+            <div
               className="flex items-center gap-2 mb-4 cursor-pointer hover:opacity-80 transition-opacity"
               onClick={handleLogoClick}
               role="button"
@@ -61,7 +61,7 @@ export function Footer() {
               </a>
             </div>
           </div>
-          
+
           {/* Product */}
           <div>
             <h4 className="font-semibold mb-3">Product</h4>
@@ -73,7 +73,7 @@ export function Footer() {
               <li><a href="#" className="hover:text-foreground transition-colors">API</a></li>
             </ul>
           </div>
-          
+
           {/* Resources */}
           <div>
             <h4 className="font-semibold mb-3">Resources</h4>
@@ -85,7 +85,7 @@ export function Footer() {
               <li><a href="#" className="hover:text-foreground transition-colors">Status</a></li>
             </ul>
           </div>
-          
+
           {/* Company */}
           <div>
             <h4 className="font-semibold mb-3">Company</h4>
@@ -98,15 +98,15 @@ export function Footer() {
             </ul>
           </div>
         </div>
-        
+
         <div className="pt-8 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-text-secondary text-sm">
-            © 2026 Chatbase. All rights reserved.
+            © 2026 Chatbot Agent. All rights reserved.
           </p>
           <div className="flex items-center gap-6 text-text-secondary text-sm">
-            <a href="#" className="hover:text-foreground transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-foreground transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-foreground transition-colors">Cookie Policy</a>
+            <a href="/privacy-policy" className="hover:text-foreground transition-colors">Privacy Policy</a>
+            <a href="/terms-of-service" className="hover:text-foreground transition-colors">Terms of Service</a>
+            <a href="/cookie-policy" className="hover:text-foreground transition-colors">Cookie Policy</a>
           </div>
         </div>
       </div>

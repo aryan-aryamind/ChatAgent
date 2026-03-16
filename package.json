@@ -3,9 +3,9 @@
   "private": true,
   "version": "0.0.1",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3006",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3006",
     "lint": "next lint",
     "db:backup": "node scripts/db-backup.js"
   },
@@ -81,9 +81,11 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/jsdom": "^28.0.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/turndown": "^5.0.6",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
     "prisma": "^5.22.0",
