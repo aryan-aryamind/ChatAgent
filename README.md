@@ -1,6 +1,6 @@
-# Chatbase Clone - AI Chatbot Platform
+# AI Chatbot Agent - AI Chatbot Platform
 
-A full-stack AI chatbot platform that allows users to create, train, and deploy custom AI chatbots trained on their own data. Built with Next.js, Python FastAPI, and modern AI technologies.
+A powerful AI agent builder designed for sales, customer support, and user engagement automation. Built with Next.js, Python FastAPI, and modern AI technologies.
 
 ![Version](https://img.shields.io/badge/version-0.0.1-blue)
 ![Next.js](https://img.shields.io/badge/Next.js-14.2-black)
@@ -22,7 +22,7 @@ A full-stack AI chatbot platform that allows users to create, train, and deploy 
 
 ## 🎯 Overview
 
-Chatbase Clone is a comprehensive AI chatbot platform that enables users to:
+**AI Chatbot Agent** is a comprehensive AI chatbot platform that enables users to:
 
 - **Create AI Agents**: Build custom chatbots trained on your own data
 - **Multiple Data Sources**: Upload documents, scrape websites, or paste text
@@ -65,7 +65,9 @@ The project design is available at [Figma](https://www.figma.com/design/FqFcuc7H
   - **LLM Mode**: Traditional AI responses using GPT/Claude
   - **CrewAI Mode**: Intent-based responses using Q&A pairs or content
 - **Content Storage**: Store scraped content in JSON format for efficient retrieval
-- **Smart Link Detection**: Automatically discover and crawl website pages
+- **Smart Link Detection**: Automatically discover and crawl website pages using Playwright and BeautifulSoup
+- **Compliance**: Built-in support for Indian data protection laws (DPDP Act 2023)
+- **Legal Pages**: Integrated Privacy Policy, Terms of Service, and Cookie Policy
 
 ## 🛠️ Tech Stack
 
@@ -124,11 +126,11 @@ The project design is available at [Figma](https://www.figma.com/design/FqFcuc7H
                             │ HTTP Requests
                             │
 ┌─────────────────────────────────────────────────────────────┐
-│         Python FastAPI Service (Port 8000)                  │
+│         Python FastAPI Service (Port 8016)                  │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
 │  │   /scrape    │  │   /chat      │  │/chat-content │       │
-│  │  (Beautiful  │  │  (CrewAI)    │  │   (RAG)      │       │
-│  │   Soup)      │  │              │  │              │       │
+│  │  (Playwright)│  │  (CrewAI)    │  │   (RAG)      │       │
+│  │   /process   │  │              │  │              │       │
 │  └──────────────┘  └──────────────┘  └──────────────┘       │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
 │  │Content       │  │Semantic      │  │LLM Agent     │       │
@@ -171,6 +173,9 @@ Chatbase-Clone/
 │   ├── index.tsx                   # Landing page
 │   ├── login.tsx                   # Login page
 │   ├── signup.tsx                  # Signup page
+│   ├── privacy-policy/             # Privacy Policy page
+│   ├── cookie-policy/              # Cookie Policy page
+│   ├── terms-of-service/           # Terms of Service page
 │   ├── dashboard/                  # Dashboard pages
 │   ├── agents/                     # Agent pages
 │   │   ├── index.tsx              # Agents list
@@ -263,11 +268,11 @@ Chatbase-Clone/
    DATABASE_URL="postgresql://user:password@localhost:5432/chatbase"
 
    # NextAuth
-   NEXTAUTH_URL="http://localhost:3000"
+   NEXTAUTH_URL="http://localhost:3006"
    NEXTAUTH_SECRET="your-secret-key-here"
 
    # Python Service
-   CREWAI_SERVICE_URL="http://localhost:8000"
+   CREWAI_SERVICE_URL="http://localhost:8016"
 
    # Optional: Ollama
    OLLAMA_URL="http://localhost:11434"
@@ -321,12 +326,12 @@ Chatbase-Clone/
    python main.py
    ```
 
-   Backend will be available at `http://localhost:8000`
+   Backend will be available at `http://localhost:8016`
 
 ### Verify Installation
 
-1. **Frontend**: Visit `http://localhost:3000`
-2. **Backend**: Visit `http://localhost:8000/health` (should return `{"status": "ok"}`)
+1. **Frontend**: Visit `http://localhost:3006`
+2. **Backend**: Visit `http://localhost:8016/health` (should return `{"status": "ok"}`)
 
 ## 🔄 How It Works
 
