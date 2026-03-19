@@ -3,7 +3,7 @@ import httpx
 import json
 
 def test_invalid_url():
-    url = "http://localhost:8000/scrape"
+    url = "http://localhost:8016/scrape"
     payload = {
         "url": "give me privcay policy",
         "max_pages": 1,

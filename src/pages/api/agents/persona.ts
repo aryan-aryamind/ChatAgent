@@ -7,7 +7,7 @@ export default async function handler(
     const { type, agent_id } = req.query
 
     try {
-        const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8000'
+        const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8016'
 
         let url = `${crewaiServiceUrl}/persona-templates`
         if (agent_id) {

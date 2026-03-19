@@ -9,7 +9,7 @@
    `POST /api/agents/[id]/chat` receives the message, agent ID, Q&A pairs, and intent confidence.
 
 3. **CrewAI service**  
-   The API calls the Python service at `CREWAI_SERVICE_URL` (default `http://localhost:8000`).
+   The API calls the Python service at `CREWAI_SERVICE_URL` (default `http://localhost:8016`).
 
 4. **Chat path**  
    - **First:** `POST /chat-content` (RAG) – used when the agent has scraped content or you want semantic + Q&A.  

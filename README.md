@@ -290,7 +290,7 @@ Chatbase-Clone/
    npm run dev
    ```
 
-   Frontend will be available at `http://localhost:3000`
+   Frontend will be available at `http://localhost:3006`
 
 ### Backend Setup
 

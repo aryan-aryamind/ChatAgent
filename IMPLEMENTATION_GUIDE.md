@@ -127,7 +127,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-The service will run on `http://localhost:8000`
+The service will run on `http://localhost:8016`
 
 ### Connecting Frontend to CrewAI Service
 
@@ -135,7 +135,7 @@ Update `pages/api/agents/[id]/chat.ts` to call the CrewAI service:
 
 ```typescript
 if (responseMode === 'crewai') {
-  const response = await fetch('http://localhost:8000/chat', {
+  const response = await fetch('http://localhost:8016/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

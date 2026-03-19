@@ -38,7 +38,7 @@ cd crewai-service
 python main.py
 ```
 
-The service will run on `http://localhost:8000`
+The service will run on `http://localhost:8016`
 
 ### 3. Test the Scraping
 
@@ -53,7 +53,7 @@ The Next.js frontend will automatically use the Python scraper. When you add a U
 
 ### Python Service Endpoint
 
-**POST** `http://localhost:8000/scrape`
+**POST** `http://localhost:8016/scrape`
 
 ```json
 {
@@ -113,7 +113,7 @@ User enters URL in Step 3
     ↓
 Next.js calls: /api/agents/[id]/scrape
     ↓
-Next.js calls: http://localhost:8000/scrape (Python)
+Next.js calls: http://localhost:8016/scrape (Python)
     ↓
 Python BeautifulSoup:
   - Scrapes homepage
@@ -147,7 +147,7 @@ Q&A pairs saved to agent
 ### Python Service Not Running
 If you see connection errors, make sure:
 1. Python service is running: `python main.py` in `crewai-service/`
-2. Service is on port 8000 (or update `CREWAI_SERVICE_URL` env var)
+2. Service is on port 8016 (or update `CREWAI_SERVICE_URL` env var)
 3. Fallback: The system will automatically use local TypeScript scraper if Python service is unavailable
 
 ### Scraping Fails

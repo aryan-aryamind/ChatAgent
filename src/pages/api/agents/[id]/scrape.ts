@@ -30,7 +30,7 @@ export default async function handler(
   try {
 
     // Call Python scraping service
-    const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8000'
+    const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8016'
     
     console.log(`🌐 Calling Python scraper service for: ${validUrl}`)
     

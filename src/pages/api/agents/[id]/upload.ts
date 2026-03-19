@@ -35,7 +35,7 @@ export default async function handler(
     const tempAgentId = `temp-file-${Date.now()}`
 
     // Call Python processing service
-    const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8000'
+    const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8016'
 
     // Read file from temporary path
     const fileBuffer = fs.readFileSync(file.filepath)

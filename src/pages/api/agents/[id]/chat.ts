@@ -4,7 +4,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 // and actual LLM/CrewAI services
 // 
 // For CrewAI integration, you would:
-// 1. Call your Python CrewAI service (running on separate port, e.g., http://localhost:8000)
+// 1. Call your Python CrewAI service (running on separate port, e.g., http://localhost:8016)
 // 2. Pass the agent's Q&A pairs and user message
 // 3. Receive intent, matched Q&A, and response
 
@@ -55,7 +55,7 @@ export default async function handler(
       }
     }
 
-    const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8000'
+    const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8016'
 
     // ALWAYS Try Python RAG service as the primary "Brain"
     try {

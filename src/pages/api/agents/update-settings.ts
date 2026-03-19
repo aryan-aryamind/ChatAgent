@@ -35,7 +35,7 @@ export default async function handler(
         // Consolidate all instructions into useCase
         const agentInstructions = details.useCase || updatedAgent.useCase || 'general'
 
-        const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8000'
+        const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8016'
 
         try {
             const pythonResponse = await fetch(`${crewaiServiceUrl}/update-agent-settings`, {
