@@ -60,9 +60,10 @@ export function AgentCard({
   className,
 }: AgentCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleCardClick = (e: React.MouseEvent) => {
-    if (showDeleteDialog) {
+    if (showDeleteDialog || isDeleting) {
       e.stopPropagation();
       return;
     }
@@ -75,16 +76,24 @@ export function AgentCard({
     }
   };
 
-  const handleConfirmDelete = () => {
-    if (onDelete) {
+  const handleConfirmDelete = async () => {
+    if (onDelete && !isDeleting) {
+      setIsDeleting(true);
       try {
-        // Close dialog first to ensure cleanup happens before unmount
+        // CLOSE DIALOG FIRST and wait for the backdrop to clean up
         setShowDeleteDialog(false);
-        onDelete(agentId);
+        
+        // Increased delay (400ms) to allow dialog unmounting animation & body lock removal to finish
+        // Radix animations typically take 200-300ms. If we unmount before this, the body lock STICKS.
+        await new Promise(resolve => setTimeout(resolve, 400));
+        
+        await onDelete(agentId);
         toast.success("Agent deleted successfully");
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error deleting agent:", error);
-        toast.error("Failed to delete agent");
+        toast.error(error.message || "Failed to delete agent");
+      } finally {
+        setIsDeleting(false);
       }
     }
   };
@@ -146,9 +155,10 @@ export function AgentCard({
 
               <DropdownMenuItem
                 className="text-red-600 focus:text-red-700 focus:bg-red-50"
+                disabled={isDeleting}
                 onClick={() => setShowDeleteDialog(true)}
               >
-                <Trash2 className="mr-2 h-4 w-4" /> Delete Agent
+                <Trash2 className="mr-2 h-4 w-4" /> {isDeleting ? "Deleting..." : "Delete Agent"}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -32,6 +32,7 @@ model User {
   agents        Agent[]
   role          Role      @default(USER)
   plan          Plan      @default(FREE)
+  apiKeys       ApiKey[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -90,6 +91,26 @@ model Agent {
   updatedAt       DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKeys         ApiKey[]
 
   @@index([userId])
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  keyHash   String   @unique
+  name      String
+  userId    String
+  agentId   String
+  usageCount Int      @default(0)
+  status    String   @default("active") // 'active' | 'disabled'
+  lastUsed  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([agentId])
 }

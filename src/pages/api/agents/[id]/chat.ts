@@ -1,19 +1,37 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-
-// This is a mock API route - in production, you'd connect to your database
-// and actual LLM/CrewAI services
-// 
-// For CrewAI integration, you would:
-// 1. Call your Python CrewAI service (running on separate port, e.g., http://localhost:8016)
-// 2. Pass the agent's Q&A pairs and user message
-// 3. Receive intent, matched Q&A, and response
-
 import { prisma } from '@/lib/prisma'
+
+// Simple in-memory rate limiter
+const rateLimitMap = new Map<string, { count: number; lastReset: number }>()
+const RATE_LIMIT_WINDOW = 60 * 1000 // 1 minute
+const MAX_REQUESTS = 10 // 10 requests per window
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now()
+  const record = rateLimitMap.get(ip)
+
+  if (!record || now - record.lastReset > RATE_LIMIT_WINDOW) {
+    rateLimitMap.set(ip, { count: 1, lastReset: now })
+    return false
+  }
+
+  record.count++
+  if (record.count > MAX_REQUESTS) {
+    return true
+  }
+  return false
+}
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  // Rate limiting
+  const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown'
+  if (isRateLimited(ip)) {
+    return res.status(429).json({ error: 'Too many requests. Please try again later.' })
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -72,6 +90,7 @@ export default async function handler(
           confidence_threshold: Math.max(safeIntentConfidence, 0.45),
           history: history || [],
           system_prompt: system_prompt,
+          company_name: agent?.name,
         }),
       })
 

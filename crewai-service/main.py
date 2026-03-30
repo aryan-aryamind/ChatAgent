@@ -111,6 +111,7 @@ class ContentChatRequest(BaseModel):
     history: Optional[List[Dict[str, str]]] = None
     persona_type: Optional[str] = "general"
     system_prompt: Optional[str] = None
+    company_name: Optional[str] = None
 
 
 class ContentChatResponse(BaseModel):
@@ -740,6 +741,7 @@ async def chat_with_content(request: ContentChatRequest):
             history=request.history,
             persona_type=persona_type,
             system_prompt=system_prompt,
+            company_name=request.company_name,
         )
 
         return ContentChatResponse(

@@ -50,7 +50,7 @@ export function AgentCreationStep4() {
   }, [selectedPersona, state.tempAgentId, state.agentId])
 
   const handleBack = () => {
-    setStep(3)
+    setStep(2)
     router.push('/agents/new/sources')
   }
   const handleCreateAgent = async () => {
@@ -117,7 +117,14 @@ export function AgentCreationStep4() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save agent to database');
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 503 || errorData.code === 'SERVICE_OFFLINE') {
+          toast.error('Model is not working, please contact the team. Server is down currently or please try again later.', { duration: 10000 });
+        } else {
+          throw new Error('Failed to save agent to database');
+        }
+        setIsCreating(false);
+        return;
       }
 
       createdAgent = await response.json();

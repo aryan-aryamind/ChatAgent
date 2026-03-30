@@ -29,7 +29,16 @@ export default async function handler(
         return res.status(200).json(data)
 
     } catch (error: any) {
-        console.error('Error fetching persona:', error)
-        return res.status(500).json({ error: 'Failed to connect to backend service' })
+        // Detailed logging for debugging, but clean response for frontend
+        const errorMessage = error.cause?.code === 'ECONNREFUSED' 
+            ? 'Backend service is not running' 
+            : error.message;
+            
+        console.error(`[Persona API Error]: ${errorMessage}`, { agent_id, type });
+        
+        return res.status(500).json({ 
+            error: 'Backend service unreachable',
+            details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+        })
     }
 }

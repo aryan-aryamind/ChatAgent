@@ -2,45 +2,45 @@ import { Star, Sparkles } from 'lucide-react';
 
 const testimonials = [
   {
-    name: 'Sarah Johnson',
-    role: 'CEO at TechStart',
-    avatar: 'SJ',
-    content: 'Chatbase has transformed how we handle customer support. Our response time went from hours to seconds, and customer satisfaction is through the roof!',
+    name: 'Rajesh Sharma',
+    role: 'Founder, RetailHub India',
+    avatar: 'RS',
+    content: 'TheChatAgent has completely changed how we manage customer queries during festive sales. Our response time dropped from hours to seconds. The local language support is a huge plus!',
     rating: 5,
   },
   {
-    name: 'Michael Chen',
-    role: 'Marketing Director',
-    avatar: 'MC',
-    content: 'The lead generation features are incredible. We\'ve captured 300% more leads since implementing Chatbase on our website. Highly recommend!',
+    name: 'Priya Desai',
+    role: 'Marketing Head, EdTech Solutions',
+    avatar: 'PD',
+    content: 'The lead generation is phenomenal. We integrated it with our WhatsApp API and saw a 300% jump in student enrollments within the first month. Incredible ROI.',
     rating: 5,
   },
   {
-    name: 'Emily Rodriguez',
-    role: 'Founder of ShopWise',
-    avatar: 'ER',
-    content: 'Setup was literally 2 minutes. I uploaded our FAQs and product docs, and the chatbot was answering questions accurately right away. Amazing!',
+    name: 'Ankit Verma',
+    role: 'Operations Manager',
+    avatar: 'AV',
+    content: 'Setup took literally 5 minutes. Uploaded our PDF brochures and policy docs, and the bot started answering complex GST and shipping queries perfectly.',
     rating: 5,
   },
   {
-    name: 'David Park',
-    role: 'Head of Support',
-    avatar: 'DP',
-    content: 'The analytics dashboard is fantastic. We can see exactly what customers are asking about and improve our documentation based on real data.',
+    name: 'Neha Gupta',
+    role: 'Customer Success Lead',
+    avatar: 'NG',
+    content: 'The analytics are top-notch. It helped us identify the exact pain points our users face during checkout. Very reliable and the local support team provides quick resolutions.',
     rating: 5,
   },
   {
-    name: 'Jessica Williams',
-    role: 'Product Manager',
-    avatar: 'JW',
-    content: 'Integration with our existing tools was seamless. The API is well-documented and the team is super responsive to questions.',
+    name: 'Vikram Singh',
+    role: 'Director, Digital Infra',
+    avatar: 'VS',
+    content: 'We reviewed many AI solutions, but TheChatAgent\'s data privacy and secure architecture gave us the confidence to deploy it across our enterprise portals.',
     rating: 5,
   },
   {
-    name: 'Alex Thompson',
+    name: 'Meera Iyer',
     role: 'E-commerce Owner',
-    avatar: 'AT',
-    content: 'Our customer support costs dropped by 60% while satisfaction scores increased. The ROI is undeniable. Best investment we\'ve made this year.',
+    avatar: 'MI',
+    content: 'Our support costs dropped drastically while customer satisfaction soared. It handles 80% of routine "where is my order" questions automatically. Highly recommended.',
     rating: 5,
   },
 ];
@@ -55,10 +55,10 @@ export function Testimonials() {
             <span className="text-sm">Testimonials</span>
           </div>
           <h2 className="text-4xl md:text-5xl font-bold mb-6">
-            Loved by businesses worldwide
+            Trusted by growing businesses across India
           </h2>
           <p className="text-xl text-text-secondary">
-            Join 1,000,000+ businesses that trust Chatbase for their AI chatbot needs.
+            Join thousands of businesses that trust TheChatAgent to handle their customer support and sales.
           </p>
         </div>
         
@@ -100,7 +100,7 @@ export function Testimonials() {
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="text-sm">
-              <span className="font-semibold">50,000+</span> reviews
+              <span className="font-semibold">1,000+</span> positive reviews
             </div>
           </div>
         </div>

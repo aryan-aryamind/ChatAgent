@@ -23,12 +23,12 @@ export default function PrivacyPolicy() {
               Introduction
             </h2>
             <p>
-              <strong>AI Chatbot Agent</strong> is an AI agent builder designed
+              <strong>TheChatAgent</strong> is an AI agent builder designed
               for sales, customer support, and user engagement automation.
             </p>
             <p>
               We understand that you care about your personal privacy. This
-              Privacy Policy describes how AI Chatbot Agent collects, uses, and
+              Privacy Policy describes how TheChatAgent collects, uses, and
               protects your personal data and outlines your privacy rights.
             </p>
             <p>
@@ -44,21 +44,25 @@ export default function PrivacyPolicy() {
             </h2>
 
             <p>
-              AI Chatbot Agent is headquartered in India. If you have any
+              TheChatAgent is headquartered in India. If you have any
               questions about how we handle your personal data, you may contact
               our Privacy Team.
             </p>
 
             <p>
-              <strong>AI Chatbot Agent</strong> <br />
-              [Complete Address with Pin Code] <br />
-              [City], [State] - [Pin Code], India
+              <strong>TheChatAgent</strong> <br />
+              C-35, Tirupati Sahibag, Village Panchot, <br />
+              Mehsana, Gujarat, 384205
+            </p>
+
+            <p>
+              Contact: +91 63561 37551
             </p>
 
             <p>
               Email:{" "}
-              <a href="mailto:privacy@aichatbotagent.co.in">
-                privacy@aichatbotagent.co.in
+              <a href="mailto:shwetatechnologie@gmail.com">
+                shwetatechnologie@gmail.com
               </a>
             </p>
           </section>
@@ -70,7 +74,7 @@ export default function PrivacyPolicy() {
             </h2>
 
             <p>
-              AI Chatbot Agent collects limited personal information from
+              TheChatAgent collects limited personal information from
               website visitors and customers including:
             </p>
 
@@ -94,7 +98,7 @@ export default function PrivacyPolicy() {
           {/* Website Usage */}
           <section>
             <h2 className="text-2xl font-bold text-foreground">
-              Use of the AI Chatbot Agent Website
+              Use of the TheChatAgent Website
             </h2>
 
             <p>
@@ -123,7 +127,7 @@ export default function PrivacyPolicy() {
             </h2>
 
             <p>
-              AI Chatbot Agent uses cookies and similar technologies to improve
+              TheChatAgent uses cookies and similar technologies to improve
               user experience and analyze site traffic. You can control or
               disable cookies through your browser settings.
             </p>
@@ -161,7 +165,7 @@ export default function PrivacyPolicy() {
             </p>
 
             <p>
-              AI Chatbot Agent ensures that all cross-border transfers comply
+              TheChatAgent ensures that all cross-border transfers comply
               with the Digital Personal Data Protection Act, 2023 and include
               appropriate safeguards.
             </p>
@@ -185,7 +189,7 @@ export default function PrivacyPolicy() {
 
             <p>
               To exercise these rights please contact us at:
-              privacy@aichatbotagent.co.in
+              shwetatechnologie@gmail.com
             </p>
           </section>
 
@@ -220,7 +224,7 @@ export default function PrivacyPolicy() {
 
             <p>
               Personal data is stored for the duration of your relationship with
-              AI Chatbot Agent and for additional periods required by law.
+              TheChatAgent and for additional periods required by law.
             </p>
 
             <ul>
@@ -238,7 +242,7 @@ export default function PrivacyPolicy() {
             </h2>
 
             <p>
-              AI Chatbot Agent does not knowingly collect data from individuals
+              TheChatAgent does not knowingly collect data from individuals
               under 18 years of age. If such data is identified, it will be
               deleted promptly.
             </p>
@@ -273,13 +277,15 @@ export default function PrivacyPolicy() {
             </p>
 
             <p>
-              <strong>AI Chatbot Agent</strong> <br />
-              [Complete Address] <br />
-              [City], [State] - [Pin Code], India
+              <strong>TheChatAgent</strong> <br />
+              C-35, Tirupati Sahibag, Village Panchot, <br />
+              Mehsana, Gujarat, 384205
             </p>
 
-            <p>Email: privacy@aichatbotagent.co.in</p>
-            <p>Grievance Officer: grievance@aichatbotagent.co.in</p>
+            <p>Contact: +91 63561 37551</p>
+
+            <p>Email: shwetatechnologie@gmail.com</p>
+            <p>Grievance Officer: shwetatechnologie@gmail.com</p>
           </section>
 
         </div>

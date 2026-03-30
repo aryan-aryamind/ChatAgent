@@ -132,7 +132,8 @@ No specific matches were found in the training data for this query.
         intent: str = "general",
         persona_type: Optional[str] = None,
         history: List[Dict] = None,
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
+        company_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Generate a high-quality, assistant-like answer.
@@ -168,7 +169,8 @@ No specific matches were found in the training data for this query.
         context_str = "\n---\n".join(context_parts)[:max_chars]
         
         # Determine business context
-        business_context = self.base_info if self.base_info else f"This is an AI assistant for {self.company_name}."
+        active_company_name = company_name or self.company_name
+        business_context = self.base_info if self.base_info else f"This is an AI assistant for {active_company_name}."
 
         # Format history (last 4 messages for context)
         history_str = "No previous history."

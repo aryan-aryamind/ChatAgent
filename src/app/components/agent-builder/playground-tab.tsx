@@ -387,36 +387,6 @@ export function PlaygroundTab({ agentId, responseMode = 'llm', agent }: Playgrou
 
         {/* Intent Confidence for RAG */}
         <div className="space-y-6">
-          {/* Accuracy Section */}
-          <div className="bg-card border rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Target className="h-4 w-4 text-primary" />
-              <Label className="text-sm font-semibold">Accuracy</Label>
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Intent Confidence</span>
-                <span className="text-sm font-medium text-primary">
-                  {(intentConfidence[0] * 100).toFixed(0)}%
-                </span>
-              </div>
-              <Slider
-                value={intentConfidence}
-                onValueChange={handleIntentConfidenceChange}
-                min={0.5}
-                max={1}
-                step={0.05}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>50%</span>
-                <span>100%</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Minimum confidence required for intent matching. Higher values mean more strict matching.
-              </p>
-            </div>
-          </div>
 
           <div className="mb-6">
             <label className="block text-sm font-medium mb-2">System Instructions(Prompt)</label>

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { CheckCircle2, Loader2, AlertCircle, Globe } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { useAgentCreation } from '@/contexts/AgentCreationContext'
+import { toast } from 'sonner'
 
 export function AgentCreationStep3() {
   const router = useRouter()
@@ -87,25 +88,20 @@ export function AgentCreationStep3() {
                   console.warn(`No data generated for ${source.url}`)
                   updateSourceStatus(source.id, 'completed')
                 }
-
-                setProcessingSources(prev => {
-                  const next = new Set(prev)
-                  next.delete(source.id)
-                  return next
-                })
               } else {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
                 console.error('Scraping failed:', errorData)
+                
+                if (response.status === 503 || errorData.code === 'SERVICE_OFFLINE') {
+                   toast.error('Model is not working, please contact the team. Server is down currently or please try again later.', { duration: 10000 });
+                }
+
                 updateSourceStatus(source.id, 'error')
-                setProcessingSources(prev => {
-                  const next = new Set(prev)
-                  next.delete(source.id)
-                  return next
-                })
               }
             } catch (error: any) {
               console.error('Error scraping URL:', error)
               updateSourceStatus(source.id, 'error')
+            } finally {
               setProcessingSources(prev => {
                 const next = new Set(prev)
                 next.delete(source.id)
@@ -148,25 +144,22 @@ export function AgentCreationStep3() {
                 }
                 
                 updateSourceStatus(source.id, 'completed')
-                
-                setProcessingSources(prev => {
-                  const next = new Set(prev)
-                  next.delete(source.id)
-                  return next
-                })
               } else {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
                 console.error('File processing failed:', errorData)
+                
+                if (response.status === 503 || errorData.code === 'SERVICE_OFFLINE') {
+                  toast.error('Model is not working, please contact the team. Server is down currently or please try again later.', { duration: 10000 });
+                } else {
+                  toast.error(errorData.message || 'File processing failed');
+                }
+
                 updateSourceStatus(source.id, 'error')
-                setProcessingSources(prev => {
-                  const next = new Set(prev)
-                  next.delete(source.id)
-                  return next
-                })
               }
             } catch (error: any) {
               console.error('Error processing file:', error)
               updateSourceStatus(source.id, 'error')
+            } finally {
               setProcessingSources(prev => {
                 const next = new Set(prev)
                 next.delete(source.id)
@@ -202,7 +195,7 @@ export function AgentCreationStep3() {
   }, [state.sources.length]) // Re-run if sources length changes (helps if context is slow to hydrate)
 
   const handleContinue = () => {
-    setStep(4)
+    setStep(3)
     router.push('/agents/new/model')
   }
 
@@ -251,7 +244,7 @@ export function AgentCreationStep3() {
                         : source.status === 'processing'
                           ? 'Scraping website and getting data...'
                           : source.status === 'error'
-                            ? 'Failed to scrape. Please try again or check the URL.'
+                            ? 'Model is not working, server is down currently. Please contact support.'
                             : 'Pending...'}
                     </p>
                   </div>
@@ -275,12 +268,12 @@ export function AgentCreationStep3() {
           <Button
             variant="outline"
             onClick={() => {
-              // Don't clear sources, just go back to edit
-              setStep(2)
-              router.push('/agents/new/details')
+              // Now goes back to index (Step 1)
+              setStep(1)
+              router.push('/agents/new')
             }}
           >
-            Back
+            Back to Setup
           </Button>
           <Button
             onClick={handleContinue}

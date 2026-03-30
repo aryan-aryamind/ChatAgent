@@ -20,7 +20,7 @@ export default function TermsOfService() {
                     <section>
                         <p>
                             THESE TERMS OF SERVICE GOVERN YOUR ACCESS AND USE OF THE SERVICES
-                            PROVIDED BY <strong>AI Chatbot Agent</strong>. By signing up,
+                            PROVIDED BY <strong>TheChatAgent</strong>. By signing up,
                             purchasing a subscription, or clicking acceptance, you agree to
                             be bound by this Agreement. If you are accepting on behalf of a
                             company or legal entity, you represent that you have authority to
@@ -40,7 +40,7 @@ export default function TermsOfService() {
                         <h2 className="text-2xl font-bold text-foreground">1. The Service</h2>
 
                         <p>
-                            AI Chatbot Agent provides a cloud-based artificial intelligence
+                            TheChatAgent provides a cloud-based artificial intelligence
                             platform that allows businesses to create AI agents for customer
                             support, sales automation, and user engagement.
                         </p>
@@ -65,7 +65,7 @@ export default function TermsOfService() {
 
                         <p>
                             Customers may purchase subscriptions to access the Service
-                            through the AI Chatbot Agent website. Each subscription is valid
+                            through the TheChatAgent website. Each subscription is valid
                             for the duration defined in the selected plan.
                         </p>
 
@@ -82,7 +82,7 @@ export default function TermsOfService() {
                         </h2>
 
                         <p>
-                            AI Chatbot Agent retains all rights, title, and interest in the
+                            TheChatAgent retains all rights, title, and interest in the
                             Service, platform software, documentation, and related materials.
                             All intellectual property rights are protected under applicable
                             Indian laws including the Copyright Act, 1957 and the Trade Marks
@@ -122,7 +122,7 @@ export default function TermsOfService() {
 
                         <p>
                             The Service may integrate with third-party services such as
-                            messaging platforms, CRMs, and APIs. AI Chatbot Agent is not
+                            messaging platforms, CRMs, and APIs. TheChatAgent is not
                             responsible for third-party services and their use is subject to
                             their own terms and policies.
                         </p>
@@ -182,7 +182,7 @@ export default function TermsOfService() {
 
                         <p>
                             The Service is provided on an “as is” and “as available” basis.
-                            AI Chatbot Agent does not guarantee uninterrupted or error-free
+                            TheChatAgent does not guarantee uninterrupted or error-free
                             operation.
                         </p>
                     </section>
@@ -194,7 +194,7 @@ export default function TermsOfService() {
                         </h2>
 
                         <p>
-                            To the maximum extent permitted by law, AI Chatbot Agent will not
+                            To the maximum extent permitted by law, TheChatAgent will not
                             be liable for indirect, incidental, or consequential damages
                             including loss of profits, revenue, or data.
                         </p>
@@ -218,7 +218,7 @@ export default function TermsOfService() {
                         </p>
 
                         <p>
-                            AI Chatbot Agent does not use customer data to train general AI
+                            TheChatAgent does not use customer data to train general AI
                             models.
                         </p>
                     </section>
@@ -240,7 +240,7 @@ export default function TermsOfService() {
                         </p>
 
                         <p>
-                            The courts of <strong>[City], India</strong> shall have
+                            The courts of <strong>Mehsana, Gujarat, India</strong> shall have
                             jurisdiction for matters not subject to arbitration.
                         </p>
                     </section>
@@ -252,18 +252,20 @@ export default function TermsOfService() {
                         </h2>
 
                         <p>
-                            <strong>AI Chatbot Agent</strong>
+                            <strong>TheChatAgent</strong>
                         </p>
 
                         <p>
-                            [Complete Registered Office Address] <br />
-                            [City], [State] - [Pin Code], India
+                            C-35, Tirupati Sahibag, Village Panchot, <br />
+                            Mehsana, Gujarat, 384205
                         </p>
 
-                        <p>Email: support@aichatbotagent.co.in</p>
-                        <p>Billing: billing@aichatbotagent.co.in</p>
-                        <p>Legal: legal@aichatbotagent.co.in</p>
-                        <p>Grievance Officer: grievance@aichatbotagent.co.in</p>
+                        <p>Contact: +91 63561 37551</p>
+
+                        <p>Email: shwetatechnologie@gmail.com</p>
+                        <p>Billing: shwetatechnologie@gmail.com</p>
+                        <p>Legal: shwetatechnologie@gmail.com</p>
+                        <p>Grievance Officer: shwetatechnologie@gmail.com</p>
                     </section>
 
                 </div>

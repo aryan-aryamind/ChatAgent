@@ -41,7 +41,7 @@ export function DeployTab({ agentId }: DeployTabProps) {
   const isExpired = expiresAt ? expiresAt < new Date() : false;
 
   const embedCode = `<iframe
-  src="${baseUrl}/chatbot/${agentId || 'your-agent-id'}"
+  src="${baseUrl}/chatbot/${agentId || 'your-agent-id'}?view=widget"
   width="100%"
   style="height: 100%; min-height: 700px"
   frameborder="0"
@@ -287,14 +287,20 @@ export function DeployTab({ agentId }: DeployTabProps) {
                 <div className="min-w-0 w-full overflow-hidden">
                   <TabsContent value="code" className="space-y-6 mt-4">
                     <div className="min-w-0">
-                      <h4 className="font-semibold mb-1">Installation</h4>
+                      <div className="flex items-center justify-between mb-3 text-white">
+                        <h4 className="font-semibold">Installation</h4>
+                      </div>
+                      
                       <p className="text-sm text-text-secondary mb-3">
-                        1. Copy this code snippet:
+                        Embed the floating chat widget directly into your website.
                       </p>
+
                       <div className="rounded-lg border border-border overflow-hidden w-full max-w-full bg-[#0d0d1a]">
                         {/* Code block header bar */}
                         <div className="flex items-center justify-between px-4 py-2 bg-[#1a1a2e] border-b border-border min-w-0">
-                          <span className="text-xs text-text-muted font-mono truncate mr-2">iframe embed</span>
+                          <span className="text-xs text-text-muted font-mono truncate mr-2">
+                            chat widget embed
+                          </span>
                           <Button
                             size="sm"
                             variant="ghost"
@@ -317,7 +323,9 @@ export function DeployTab({ agentId }: DeployTabProps) {
                         </div>
                         {/* Code block body */}
                         <pre className="p-4 overflow-x-auto max-h-48 w-full block min-w-0">
-                          <code className="text-xs font-mono text-green-400 leading-relaxed whitespace-pre-wrap break-all sm:whitespace-pre sm:break-normal">{embedCode}</code>
+                          <code className="text-xs font-mono text-green-400 leading-relaxed whitespace-pre-wrap break-all sm:whitespace-pre sm:break-normal">
+                            {embedCode}
+                          </code>
                         </pre>
                       </div>
                       <p className="text-sm text-text-secondary mt-3">

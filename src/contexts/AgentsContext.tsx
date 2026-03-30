@@ -69,7 +69,7 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
 
             // Legacy cleanup: clear any old local storage data once successfully loaded from DB
             if (typeof window !== 'undefined') {
-              localStorage.removeItem('chatbase_agents')
+              localStorage.removeItem('thechatagent_agents')
             }
           }
         } catch (error) {
@@ -106,7 +106,10 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
 
   const deleteAgent = async (id: string) => {
     if (!id) return
-
+    
+    // Save current state for potential rollback
+    const previousAgents = [...agents];
+    
     // Optimistic update
     setAgents(prev => prev.filter(a => a.id !== id))
 
@@ -127,10 +130,28 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         console.error('Final deletion failed:', errorData.error || response.statusText)
-        // Optionally: revert optimistic update if both fail
+        
+        // Revert optimistic update
+        setAgents(previousAgents);
+        throw new Error(errorData.error || 'Failed to delete agent');
       }
-    } catch (e) {
-      console.error('Delete failed:', e)
+    } catch (e: any) {
+      console.error('Delete failed:', e);
+      // Revert if not already caught
+      setAgents(previousAgents);
+      throw e;
+    } finally {
+      // FORCE CLEANUP of Radix/Headless UI body locks
+      // This fixes the "unresponsive UI" bug where backdrops/pointer-events: none get stuck
+      if (typeof document !== 'undefined') {
+        setTimeout(() => {
+          document.body.style.pointerEvents = 'auto';
+          document.body.style.overflow = 'auto';
+          // Find and remove any leftover overlays if they exist
+          const leftoverOverlays = document.querySelectorAll('[data-slot="alert-dialog-overlay"]');
+          leftoverOverlays.forEach(el => (el as HTMLElement).style.display = 'none');
+        }, 300);
+      }
     }
   }
 

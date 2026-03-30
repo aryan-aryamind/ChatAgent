@@ -28,10 +28,24 @@ export default async function handler(
   }
 
   try {
+    const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8016'
+
+    // === HEALTH CHECK: Ensure LLM backend is online before proceeding ===
+    try {
+      const healthRes = await fetch(`${crewaiServiceUrl}/health`, { method: 'GET', signal: AbortSignal.timeout(4000) })
+      if (!healthRes.ok) {
+        throw new Error('unhealthy')
+      }
+    } catch {
+      console.error('❌ CrewAI backend is offline — blocking scrape/agent creation')
+      return res.status(503).json({
+        error: 'AI backend service is currently offline.',
+        message: 'The LLM/AI service is not running. Please start the backend service before creating an agent. Agent creation requires a live AI backend to process and learn from your content.',
+        code: 'SERVICE_OFFLINE',
+      })
+    }
 
     // Call Python scraping service
-    const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8016'
-    
     console.log(`🌐 Calling Python scraper service for: ${validUrl}`)
     
     // Generate temporary agent ID (hash of URL + timestamp for uniqueness)
@@ -150,46 +164,16 @@ export default async function handler(
     })
   } catch (error: any) {
     console.error('Scraping error:', error)
-    
-    // Fallback to local scraper if Python service is unavailable
-    if (error.message?.includes('fetch') || error.message?.includes('ECONNREFUSED')) {
-      console.warn('Python scraper service unavailable, falling back to local scraper')
-      try {
-        const { scrapeURL } = await import('@/lib/scraper')
-        const scrapedContent = await scrapeURL(validUrl)
-        const qaPairs = generateQAPairsFromContent(scrapedContent, {
-          maxPairs: options?.maxPairs || 50,
-          minAnswerLength: options?.minAnswerLength || 20,
-        })
 
-        return res.status(200).json({
-          success: true,
-          data: {
-            title: scrapedContent.title,
-            content: scrapedContent.content, // No limit in fallback too
-            url: scrapedContent.url,
-            headings: scrapedContent.headings,
-            metadata: scrapedContent.metadata,
-            qaPairs: qaPairs,
-            stats: {
-              totalCharacters: scrapedContent.content.length,
-              headingsCount: scrapedContent.headings.length,
-              qaPairsCount: qaPairs.length,
-              totalPages: 1,
-              sitemapUrls: 0,
-            },
-            pages: [],
-          }
-        })
-      } catch (fallbackError: any) {
-        return res.status(500).json({ 
-          error: 'Failed to scrape URL',
-          message: fallbackError.message || 'Unknown error occurred'
-        })
-      }
+    if (error.message?.includes('ECONNREFUSED') || error.message?.includes('fetch failed') || error.message?.includes('SERVICE_OFFLINE')) {
+      return res.status(503).json({
+        error: 'AI backend service is offline.',
+        message: 'The LLM service is not running. Please start the Python backend before creating an agent.',
+        code: 'SERVICE_OFFLINE',
+      })
     }
-    
-    return res.status(500).json({ 
+
+    return res.status(500).json({
       error: 'Failed to scrape URL',
       message: error.message || 'Unknown error occurred'
     })

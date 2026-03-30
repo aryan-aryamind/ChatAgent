@@ -17,6 +17,21 @@ export default async function handler(
     }
 
     try {
+    const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8016'
+
+        // === HEALTH CHECK: block agent creation if LLM service is down ===
+        try {
+            const healthRes = await fetch(`${crewaiServiceUrl}/health`, { method: 'GET', signal: AbortSignal.timeout(4000) })
+            if (!healthRes.ok) throw new Error('unhealthy')
+        } catch {
+            console.error('❌ CrewAI backend offline — blocking agent creation')
+            return res.status(503).json({
+                error: 'AI backend service is currently offline.',
+                message: 'The AI service must be running to create an agent. Please start the backend and try again.',
+                code: 'SERVICE_OFFLINE',
+            })
+        }
+
         const {
             name,
             websiteUrl,

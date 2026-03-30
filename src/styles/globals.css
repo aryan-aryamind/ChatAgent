@@ -4,3 +4,15 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ABSOLUTE TRANSPARENCY OVERRIDE FOR WIDGET IFRAMES */
+.widget-mode,
+.widget-mode body,
+.widget-mode #__next,
+html.dark.widget-mode,
+html.dark.widget-mode body {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  --background: transparent !important;
+}

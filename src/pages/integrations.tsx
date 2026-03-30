@@ -75,7 +75,7 @@ export default function IntegrationsPage() {
         <div className="p-8">
           <PageHeader
             title="Integrations"
-            description="Connect Chatbase with your favorite tools and platforms"
+            description="Connect TheChatAgent with your favorite tools and platforms"
           />
 
           <div className="mt-8">

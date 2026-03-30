@@ -1,7 +1,9 @@
 import { ArrowRight } from 'lucide-react';
 import { GradientButton } from '../gradient-button';
+import { useRouter } from 'next/router';
 
 export function CTA() {
+  const router = useRouter();
   return (
     <section className="py-20 px-6">
       <div className="max-w-4xl mx-auto">
@@ -15,7 +17,7 @@ export function CTA() {
               Ready to build your AI chatbot?
             </h2>
             <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
-              Join 1,000,000+ businesses using Chatbase. Start your free trial today – no credit card required.
+              Join 1,000,000+ businesses using TheChatAgent. Start your free trial today – no credit card required.
             </p>
             
             <div className="flex items-center justify-center gap-4">
@@ -23,6 +25,7 @@ export function CTA() {
                 variant="secondary"
                 size="lg"
                 className="bg-white text-[#6366F1] hover:bg-white/90 gap-2"
+                onClick={() => router.push('/signup')}
               >
                 Get Started Free
                 <ArrowRight className="h-5 w-5" />

@@ -9,6 +9,7 @@ interface User {
   email?: string | null
   image?: string | null
   plan?: string | null
+  role?: string | null
 }
 
 interface AuthContextType {
@@ -48,6 +49,7 @@ function AuthContextProvider({ children }: { children: ReactNode }) {
         email: session.user.email,
         image: session.user.image,
         plan: (session.user as any).plan,
+        role: (session.user as any).role,
       })
     } else {
       setUser(null)

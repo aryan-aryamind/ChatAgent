@@ -147,7 +147,7 @@ class RAGAgent:
             is_technical = (
                 aid.isdigit() or 
                 aid.startswith(('temp_', 'agent_', 'bot_')) or
-                len(aid) > 25 or
+                len(aid) >= 25 or  # CUIDs are typically 25 chars
                 "aHR0" in aid # Base64 'http' marker
             )
             if not is_technical:
@@ -265,15 +265,17 @@ class RAGAgent:
         max_context_length: int = 2500,
         min_similarity: float = 0.1,
         persona_type: Optional[str] = None,
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
+        company_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Coordinated Answer Pipeline (Modular)
         """
         # 1. Identity Boosting & Rewriting
+        active_company_name = company_name or self.company_name
         query = self.rewrite_query(query)
         if history and len(history) > 0:
-            query = self._recontextualization(query, history)
+            query = self._recontextualization(query, history, active_company_name)
         
         # 2. Intent Classification (Specialized Agent)
         intent_info = self.classifier.classify(query, qa_pairs or [])
@@ -298,14 +300,15 @@ class RAGAgent:
             intent=intent_info['intent'],
             persona_type=persona_type,
             history=history,
-            system_prompt=system_prompt
+            system_prompt=system_prompt,
+            company_name=active_company_name
         )
         result['intent'] = intent_info['intent']
         return result
 
-    def _recontextualization(self, query: str, history: List[Dict[str, str]]) -> str:
+    def _recontextualization(self, query: str, history: List[Dict[str, str]], company_name: str = "the company") -> str:
         hist_str = "\n".join([f"{'User' if m['role']=='user' else 'Assistant'}: {m['content']}" for m in history[-3:]])
-        prompt = self.RECONTEXTUALIZER_PROMPT.format(history=hist_str, query=query, company_name=self.company_name)
+        prompt = self.RECONTEXTUALIZER_PROMPT.format(history=hist_str, query=query, company_name=company_name)
         rewritten = self.llm_agent.chat("You are a standalone question rewriter.", prompt, max_tokens=100)
         if rewritten:
             rewritten = rewritten.strip().strip('"').strip("'")

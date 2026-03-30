@@ -51,10 +51,10 @@ export default function BillingPage() {
                   For billing inquiries, usage increases, or enterprise plans, please email us at:
                 </p>
                 <a 
-                  href="mailto:billing@chatbase.com" 
+                  href="mailto:shwetatechnologie@gmail.com" 
                   className="text-xl font-bold text-primary hover:underline block mt-2"
                 >
-                  billing@chatbase.com
+                  shwetatechnologie@gmail.com
                 </a>
               </div>
             </div>

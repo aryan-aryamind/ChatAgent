@@ -97,7 +97,7 @@ export function Features() {
           {features.map((feature, index) => (
             <div
               key={index}
-              className="bg-card rounded-xl p-6 border border-border hover:border-border-emphasis transition-all group"
+              className="bg-card rounded-xl p-6 border border-border hover:border-primary/50 hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 transition-all duration-300 group"
             >
               <div className="p-3 rounded-lg bg-gradient-to-r from-[#6366F1]/10 to-[#8B5CF6]/10 w-fit mb-4 group-hover:from-[#6366F1]/20 group-hover:to-[#8B5CF6]/20 transition-all">
                 <feature.icon className="h-6 w-6 text-primary" />

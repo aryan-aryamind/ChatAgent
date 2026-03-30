@@ -98,7 +98,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
           <div className="p-1.5 rounded-lg bg-gradient-to-r from-[#6366F1] to-[#8B5CF6]">
             <Bot className="h-5 w-5 text-white" />
           </div>
-          <span className="text-lg font-bold">Chatbase</span>
+          <span className="text-lg font-bold">TheChatAgent</span>
         </div>
 
         {/* Workspace selector */}
@@ -173,6 +173,25 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
               <span>{item.label}</span>
             </button>
           ))}
+          
+          {/* Admin Management Section */}
+          {(user as any)?.role === 'ADMIN' && (
+            <div className="mt-6 pt-6 border-t border-sidebar-border">
+              <p className="px-3 mb-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">Admin Control</p>
+              <button
+                onClick={() => onNavigate('admin/api-keys')}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                  currentPage === 'admin-keys'
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground border-l-2 border-primary'
+                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                )}
+              >
+                <Key className="h-5 w-5 flex-shrink-0 text-amber-500" />
+                <span className="text-amber-500 font-semibold">Admin: API Keys</span>
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 
@@ -198,10 +217,10 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
                   For billing inquiries, usage increases, or enterprise plans, please email us at:
                 </p>
                 <a 
-                  href="mailto:billing@chatbase.com" 
+                  href="mailto:shwetatechnologie@gmail.com" 
                   className="text-xl font-bold text-primary hover:underline block mt-2"
                 >
-                  billing@chatbase.com
+                  shwetatechnologie@gmail.com
                 </a>
               </div>
             </div>

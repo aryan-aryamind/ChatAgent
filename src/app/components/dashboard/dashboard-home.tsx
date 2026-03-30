@@ -13,7 +13,7 @@ interface DashboardHomeProps {
 
 export function DashboardHome({ onNavigateToAgent, onCreateAgent }: DashboardHomeProps) {
   const { data: session } = useSession();
-  const { agents, isLoaded } = useAgents();
+  const { agents, isLoaded, deleteAgent } = useAgents();
 
   const userName = session?.user?.name || 'there';
 
@@ -90,6 +90,7 @@ export function DashboardHome({ onNavigateToAgent, onCreateAgent }: DashboardHom
                 conversations={agent.conversations || 0}
                 lastActive="Just now"
                 onClick={() => onNavigateToAgent(agent.id)}
+                onDelete={deleteAgent}
               />
             ))}
           </div>

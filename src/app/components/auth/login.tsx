@@ -77,7 +77,7 @@ export function Login({ onNavigateToSignup }: LoginProps) {
             <div className="p-2 rounded-lg bg-gradient-to-r from-[#6366F1] to-[#8B5CF6]">
               <Bot className="h-8 w-8 text-white" />
             </div>
-            <span className="text-2xl font-bold">Chatbase</span>
+            <span className="text-2xl font-bold">TheChatAgent</span>
           </div>
           
           <h1 className="text-3xl font-bold mb-2">Welcome back</h1>

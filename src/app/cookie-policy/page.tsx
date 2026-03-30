@@ -22,7 +22,7 @@ export default function CookiePolicy() {
                         <h2 className="text-2xl font-bold text-foreground">Introduction</h2>
 
                         <p>
-                            AI Chatbot Agent believes in transparency about how data is
+                            TheChatAgent believes in transparency about how data is
                             collected and used. This Cookie Policy explains how and when
                             cookies are used when you visit our website or use our services.
                         </p>
@@ -56,11 +56,11 @@ export default function CookiePolicy() {
                     {/* Use of Cookies */}
                     <section>
                         <h2 className="text-2xl font-bold text-foreground">
-                            Does AI Chatbot Agent Use Cookies?
+                            Does TheChatAgent Use Cookies?
                         </h2>
 
                         <p>
-                            Yes. AI Chatbot Agent uses cookies and similar technologies such
+                            Yes. TheChatAgent uses cookies and similar technologies such
                             as web beacons, pixels, and local storage to improve user
                             experience, analyze traffic, and enhance security.
                         </p>
@@ -226,17 +226,17 @@ export default function CookiePolicy() {
                         </h2>
 
                         <p>
-                            <strong>AI Chatbot Agent</strong>
+                            <strong>TheChatAgent</strong>
                         </p>
 
                         <p>
-                            [Complete Registered Office Address] <br />
-                            [City], [State] - [Pin Code], India
+                            C-35, Tirupati Sahibag, Village Panchot, <br />
+                            Mehsana, Gujarat, 384205
                         </p>
 
-                        <p>Email: privacy@aichatbotagent.co.in</p>
-                        <p>Grievance Officer: grievance@aichatbotagent.co.in</p>
-                        <p>Phone: [Contact Number]</p>
+                        <p>Email: shwetatechnologie@gmail.com</p>
+                        <p>Grievance Officer: shwetatechnologie@gmail.com</p>
+                        <p>Phone: +91 63561 37551</p>
                     </section>
 
                 </div>

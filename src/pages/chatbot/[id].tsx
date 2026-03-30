@@ -1,8 +1,10 @@
 import { useRouter } from 'next/router';
 import { StandaloneChat } from '@/app/components/chatbot/standalone-chat';
+import { ChatWidget } from '@/app/components/chat-widget/chat-widget';
 import { useAgents } from '@/contexts/AgentsContext';
 import Head from 'next/head';
 import { useEffect, useState } from 'react';
+import { cn } from '../../app/components/ui/utils';
 
 export default function ChatbotEmbedPage() {
     const router = useRouter();
@@ -14,6 +16,32 @@ export default function ChatbotEmbedPage() {
 
     const agentId = id as string;
     const contextAgent = agentId ? getAgent(agentId) : null;
+    const isWidgetView = router.query.view === 'widget';
+
+    useEffect(() => {
+        if (isWidgetView) {
+            // High-priority transparency enforcement
+            const forceTransparency = () => {
+                document.documentElement.classList.add('widget-mode');
+                document.body.classList.add('widget-mode');
+                
+                const targets = [document.documentElement, document.body, document.getElementById('__next')];
+                targets.forEach(el => {
+                    if (el) {
+                        el.style.backgroundColor = 'transparent';
+                        el.style.backgroundImage = 'none';
+                        el.style.setProperty('background-color', 'transparent', 'important');
+                        el.style.setProperty('background-image', 'none', 'important');
+                    }
+                });
+            };
+
+            forceTransparency();
+            // Run again after a short delay to catch the theme manager's initialization
+            const timer = setTimeout(forceTransparency, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [isWidgetView]);
 
     useEffect(() => {
         if (!agentId) return;
@@ -46,7 +74,7 @@ export default function ChatbotEmbedPage() {
         };
 
         fetchPublicAgent();
-    }, [agentId, contextAgent]);
+    }, [agentId, contextAgent, isWidgetView]);
 
     if (!id || (isLoading && !contextAgent)) return null;
 
@@ -79,17 +107,30 @@ export default function ChatbotEmbedPage() {
         );
     }
 
+
     return (
-        <>
+        <div 
+            className={isWidgetView ? 'bg-transparent overflow-visible' : 'min-h-screen bg-background'}
+            style={isWidgetView ? { backgroundColor: 'transparent' } : {}}
+        >
             <Head>
                 <title>{agent?.name || 'Chatbot'} | Powered by AI Agent</title>
                 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
             </Head>
-            <StandaloneChat
-                agentId={agentId}
-                agentName={agent?.name || 'Assistant'}
-                initialMessage={agent?.initialMessage}
-            />
-        </>
+            {isWidgetView ? (
+                <ChatWidget
+                    agentId={agentId}
+                    transparent={true}
+                    defaultOpen={router.query.open === 'true'}
+                />
+            ) : (
+                <StandaloneChat
+                    agentId={agentId}
+                    agentName={agent?.name || 'Assistant'}
+                    initialMessage={agent?.initialMessage}
+                    transparent={isWidgetView}
+                />
+            )}
+        </div>
     );
 }

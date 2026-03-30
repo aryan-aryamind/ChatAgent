@@ -46,7 +46,7 @@ export function Navbar({ onNavigateToLogin, onNavigateToSignup }: NavbarProps = 
             <div className="p-2 rounded-lg bg-gradient-to-r from-[#6366F1] to-[#8B5CF6]">
               <Bot className="h-6 w-6 text-white" />
             </div>
-            <span className="text-xl font-bold">Chatbase</span>
+            <span className="text-xl font-bold">TheChatAgent</span>
           </div>
           
           <div className="hidden md:flex items-center gap-8">

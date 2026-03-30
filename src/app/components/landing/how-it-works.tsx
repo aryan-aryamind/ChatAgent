@@ -44,7 +44,7 @@ export function HowItWorks() {
           
           {steps.map((step, index) => (
             <div key={index} className="relative">
-              <div className="bg-card rounded-2xl p-8 border border-border text-center relative z-10">
+              <div className="bg-card rounded-2xl p-8 border border-border hover:border-primary/30 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 text-center relative z-10 group">
                 {/* Step number badge */}
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-12 h-12 rounded-full bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] flex items-center justify-center text-white font-bold text-lg border-4 border-background">
                   {index + 1}
