@@ -3,12 +3,10 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { PlaygroundTab } from './playground-tab';
-import { DataSourcesTab } from './data-sources-tab';
-import { ActionsTab } from './actions-tab';
 import { AnalyticsTab } from './analytics-tab';
-import { ActivityTab } from './activity-tab';
 import { DeployTab } from './deploy-tab';
 import { SettingsTab } from './settings-tab';
+import { ComingSoon } from '../coming-soon';
 import { useAgents } from '@/contexts/AgentsContext';
 
 interface AgentBuilderProps {
@@ -83,8 +81,8 @@ export function AgentBuilder({ agentId, onBack }: AgentBuilderProps) {
 
           <div className="flex items-center gap-3">
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${agentStatus === 'active'
-                ? 'bg-success/10 text-success'
-                : 'bg-text-muted/10 text-text-muted'
+              ? 'bg-success/10 text-success'
+              : 'bg-text-muted/10 text-text-muted'
               }`}>
               <div className={`w-2 h-2 rounded-full ${agentStatus === 'active' ? 'bg-success' : 'bg-text-muted'
                 }`} />
@@ -119,11 +117,17 @@ export function AgentBuilder({ agentId, onBack }: AgentBuilderProps) {
             </TabsContent>
 
             <TabsContent value="data-sources" className="m-0 h-full">
-              <DataSourcesTab agentId={agentId || undefined} />
+              <ComingSoon
+                title="Data Sources"
+                description="Data Sources configuration is currently under development. You will soon be able to connect your agent to various external data providers."
+              />
             </TabsContent>
 
             <TabsContent value="actions" className="m-0 h-full">
-              <ActionsTab agentId={agentId || undefined} />
+              <ComingSoon
+                title="Actions"
+                description="Agent Actions are currently under development. You will soon be able to configure specific tools and APIs for your agent to execute."
+              />
             </TabsContent>
 
             <TabsContent value="analytics" className="m-0 h-full">
@@ -131,7 +135,10 @@ export function AgentBuilder({ agentId, onBack }: AgentBuilderProps) {
             </TabsContent>
 
             <TabsContent value="activity" className="m-0 h-full">
-              <ActivityTab agentId={agentId || undefined} />
+              <ComingSoon
+                title="Activity"
+                description="Activity monitoring is currently under development. You will soon be able to view detailed interaction logs and metrics."
+              />
             </TabsContent>
 
             <TabsContent value="deploy" className="m-0 h-full">
