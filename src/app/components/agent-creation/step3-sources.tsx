@@ -46,60 +46,86 @@ export function AgentCreationStep3() {
           // If it's a link source, scrape it
           if (source.type === 'link' && source.url) {
             try {
-              console.log(`Scraping URL: ${source.url}`)
+              console.log(`🚀 Starting Async Scrape for: ${source.url}`)
+              
+              // 1. Initial request to START the scrape
               const response = await fetch(`/api/agents/new/scrape`, {
                 method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   url: source.url,
-                  options: {
-                    maxPairs: 30,
-                    minAnswerLength: 20,
-                  }
+                  options: { maxPairs: 30, minAnswerLength: 20 }
                 }),
               })
 
-              if (response.ok) {
-                const data = await response.json()
-                console.log(`Scraping successful for ${source.url}`)
-
-                // Save temp agent ID if available
-                if (data.data?.tempAgentId) {
-                  console.log('Saving temp agent ID:', data.data.tempAgentId)
-                  setTempAgentId(data.data.tempAgentId)
-                }
-
-                // Update source with scraped data and title
-                if (data.data?.title) {
-                  const backendTitle = data.data.title;
-                  const genericTitles = ["Scraped Website", "Untitled", "None", "Website"];
-                  if (!genericTitles.includes(backendTitle)) {
-                    console.log(`Updating source name from "${source.name}" to "${backendTitle}"`);
-                    updateSourceName(source.id, backendTitle);
-                  }
-                }
-
-                if (data.data?.qaPairs && data.data.qaPairs.length > 0) {
-                  updateSourceQAPairs(source.id, data.data.qaPairs)
-                  updateSourceStatus(source.id, 'completed')
-                } else {
-                  console.warn(`No data generated for ${source.url}`)
-                  updateSourceStatus(source.id, 'completed')
-                }
-              } else {
+              if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-                console.error('Scraping failed:', errorData)
-                
                 if (response.status === 503 || errorData.code === 'SERVICE_OFFLINE') {
-                   toast.error('Model is not working, please contact the team. Server is down currently or please try again later.', { duration: 10000 });
+                   toast.error('AI service is busy. Still working in background, please wait...', { duration: 5000 });
                 }
+                throw new Error(errorData.error || 'Failed to start scraping');
+              }
 
+              const startData = await response.json()
+              console.log(`✅ Scrape started. Task ID: ${startData.taskId}`)
+
+              if (startData.tempAgentId) {
+                setTempAgentId(startData.tempAgentId)
+              }
+
+              // 2. POLLING LOOP: Wait for completion
+              let isDone = false
+              let attempts = 0
+              const maxAttempts = 120 // 10 minutes total (120 * 5s)
+
+              while (!isDone && attempts < maxAttempts) {
+                attempts++
+                // Wait 5 seconds between polls
+                await new Promise(resolve => setTimeout(resolve, 5000))
+                
+                try {
+                  const pollRes = await fetch(`/api/agents/new/scrape?taskId=${startData.taskId}`)
+                  if (!pollRes.ok) continue // Try again on network glitch
+
+                  const task = await pollRes.json()
+                  console.log(`Status poll for ${source.url}: ${task.status}`)
+
+                  if (task.status === 'completed' && task.data?.transformed) {
+                    const data = task.data.transformed
+                    
+                    // Update source name
+                    if (data.title) {
+                      const genericTitles = ["Scraped Website", "Untitled", "None", "Website"];
+                      if (!genericTitles.includes(data.title)) {
+                        updateSourceName(source.id, data.title);
+                      }
+                    }
+
+                    // Update Q&A Pairs
+                    if (data.qaPairs && data.qaPairs.length > 0) {
+                      updateSourceQAPairs(source.id, data.qaPairs)
+                    }
+
+                    updateSourceStatus(source.id, 'completed')
+                    isDone = true
+                  } else if (task.status === 'error') {
+                    console.error('Async scrape failed:', task.error)
+                    updateSourceStatus(source.id, 'error')
+                    isDone = true
+                  }
+                } catch (pollErr) {
+                  console.warn('Polling glitch:', pollErr)
+                  // Keep trying...
+                }
+              }
+
+              if (!isDone) {
+                console.error('Scraping timed out after 10 minutes')
                 updateSourceStatus(source.id, 'error')
               }
+
             } catch (error: any) {
-              console.error('Error scraping URL:', error)
+              console.error('Error in scraping process:', error)
               updateSourceStatus(source.id, 'error')
             } finally {
               setProcessingSources(prev => {

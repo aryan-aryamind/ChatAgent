@@ -5,6 +5,68 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8016'
+
+  // --- HANDLE STATUS POLLING (GET) ---
+  if (req.method === 'GET') {
+    const { taskId } = req.query
+    if (!taskId) return res.status(400).json({ error: 'taskId is required for polling' })
+
+    try {
+      const statusRes = await fetch(`${crewaiServiceUrl}/scrape-status/${taskId}`, {
+        signal: AbortSignal.timeout(10000) // Status check should be fast
+      })
+      
+      if (!statusRes.ok) {
+        return res.status(statusRes.status).json({ error: 'Failed to fetch status from backend' })
+      }
+
+      const taskData = await statusRes.json()
+
+      // If completed, transform the data to the format the UI expects
+      if (taskData.status === 'completed' && taskData.data) {
+        const scrapeData = taskData.data
+        
+        // Transform headings from Python format (level: "h1") to TypeScript format (level: 1)
+        const transformedHeadings = (scrapeData.headings || []).map((heading: any) => {
+          if (typeof heading === 'object' && heading !== null) {
+            if (typeof heading.level === 'string' && heading.level.startsWith('h')) {
+              const levelNum = parseInt(heading.level.substring(1)) || 1
+              return { level: levelNum, text: heading.text || '', id: heading.id }
+            }
+            return { level: heading.level || 1, text: heading.text || '', id: heading.id }
+          }
+          return heading
+        }).filter((h: any) => h && h.text && h.text.trim().length > 0)
+
+        const scrapedContent = {
+          title: scrapeData.title || 'Scraped Website',
+          content: scrapeData.content || '',
+          url: scrapeData.url,
+          headings: transformedHeadings,
+        }
+
+        // Keep local Q&A generation for consistency with existing logic
+        const qaPairs = generateQAPairsFromContent(scrapedContent as any, {
+          maxPairs: 50,
+          minAnswerLength: 20,
+        })
+
+        // Add transformed data to the response
+        taskData.data.transformed = {
+          ...scrapeData,
+          headings: transformedHeadings,
+          qaPairs: qaPairs,
+        }
+      }
+
+      return res.status(200).json(taskData)
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Polling error', message: err.message })
+    }
+  }
+
+  // --- HANDLE START SCRAPE (POST) ---
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -21,166 +83,63 @@ export default async function handler(
     return res.status(400).json({ error: 'Valid agent ID is required' })
   }
 
-  // Validate URL format (declare outside try-catch for fallback access)
   let validUrl = url.trim()
   if (!validUrl.startsWith('http://') && !validUrl.startsWith('https://')) {
     validUrl = `https://${validUrl}`
   }
 
   try {
-    const crewaiServiceUrl = process.env.CREWAI_SERVICE_URL || 'http://localhost:8016'
-
-    // === HEALTH CHECK: Ensure LLM backend is online before proceeding ===
+    // === HEALTH CHECK ===
     try {
-      // Increased timeout to 10 minutes to allow for very busy backend
       const healthRes = await fetch(`${crewaiServiceUrl}/health`, {
         method: 'GET',
-        signal: AbortSignal.timeout(600000)
+        signal: AbortSignal.timeout(5000)
       })
-      if (!healthRes.ok) {
-        throw new Error('unhealthy')
-      }
+      if (!healthRes.ok) throw new Error('unhealthy')
     } catch {
-      console.error('❌ CrewAI backend is offline — blocking scrape/agent creation')
       return res.status(503).json({
         error: 'AI backend service is currently offline.',
-        message: 'The LLM/AI service is not running or is too busy. Please ensure the backend service is started. Agent creation requires a live AI backend to process and learn from your content.',
+        message: 'The AI service is not running or busy. Please try again in 30 seconds.',
         code: 'SERVICE_OFFLINE',
       })
     }
 
-    // Call Python scraping service
-    console.log(`🌐 Calling Python scraper service for: ${validUrl}`)
-
-    // Generate temporary agent ID (hash of URL + timestamp for uniqueness)
+    // Call Python scraping service (Async start)
+    console.log(`🌐 Initiating Async Scrape for: ${validUrl}`)
     const tempAgentId = `temp-${Buffer.from(validUrl).toString('base64').slice(0, 20)}-${Date.now()}`
 
-    // Increased timeout for the main scrape request (10 minutes as requested by user)
     const scrapeResponse = await fetch(`${crewaiServiceUrl}/scrape`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      signal: AbortSignal.timeout(600000), // 10 minutes timeout
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         url: validUrl,
-        agent_id: tempAgentId, // Save content with temporary ID
-        max_pages: options?.maxPages || options?.max_pages || 100, // Increased default
-        max_depth: options?.maxDepth || options?.max_depth || 5, // Increased default
-        follow_external: options?.followExternal || options?.follow_external || false,
-        respect_robots: options?.respectRobots !== false,
-        delay: options?.delay || 0.3,
+        agent_id: tempAgentId,
+        max_pages: options?.maxPages || 100,
+        max_depth: options?.maxDepth || 5,
+        persona_type: options?.personaType || "general",
       }),
     })
 
     if (!scrapeResponse.ok) {
       const errorData = await scrapeResponse.json().catch(() => ({ detail: 'Unknown error' }))
-      throw new Error(errorData.detail || `Python service error: ${scrapeResponse.statusText}`)
+      throw new Error(errorData.detail || `Backend error: ${scrapeResponse.statusText}`)
     }
 
-    const scrapeData = await scrapeResponse.json()
-
-    console.log('📥 Python scraper response:', {
-      success: scrapeData.success,
-      hasData: !!scrapeData.data,
-      dataKeys: scrapeData.data ? Object.keys(scrapeData.data) : [],
-      contentLength: scrapeData.data?.content?.length || 0,
-      headingsCount: scrapeData.data?.headings?.length || 0,
-      pagesCount: scrapeData.data?.pages?.length || 0
-    })
-
-    if (!scrapeData.success || !scrapeData.data) {
-      console.error('❌ Python scraper returned unsuccessful response:', scrapeData)
-      throw new Error('Python scraper returned unsuccessful response')
-    }
-
-    // Check if content is empty
-    if (!scrapeData.data.content || scrapeData.data.content.trim().length === 0) {
-      console.warn('⚠️  Python scraper returned empty content')
-      // Don't throw error, but log warning - might still have pages
-    }
-
-    // Convert Python response to TypeScript format for Q&A generation
-    // Transform headings from Python format (level: "h1") to TypeScript format (level: 1)
-    const transformedHeadings = (scrapeData.data.headings || []).map((heading: any) => {
-      if (typeof heading === 'object' && heading !== null) {
-        // Handle Python format: { level: "h1", text: "..." }
-        if (typeof heading.level === 'string' && heading.level.startsWith('h')) {
-          const levelNum = parseInt(heading.level.substring(1)) || 1
-          return {
-            level: levelNum,
-            text: heading.text || heading.text || '',
-            id: heading.id
-          }
-        }
-        // Handle TypeScript format: { level: 1, text: "..." }
-        return {
-          level: heading.level || 1,
-          text: heading.text || '',
-          id: heading.id
-        }
-      }
-      return heading
-    }).filter((h: any) => h && h.text && h.text.trim().length > 0)
-
-    const scrapedContent = {
-      title: scrapeData.data.title || 'Scraped Website',
-      content: scrapeData.data.content || '', // Full content - NO LIMITS!
-      url: scrapeData.data.url,
-      headings: transformedHeadings,
-      metadata: scrapeData.data.metadata || {},
-      html: '', // Not needed for Q&A generation
-    }
-
-    // Debug logging
-    console.log(`📊 Scraped content stats:`, {
-      title: scrapedContent.title,
-      contentLength: scrapedContent.content.length,
-      headingsCount: scrapedContent.headings.length,
-      url: scrapedContent.url
-    })
-
-    // Generate Q&A pairs from content
-    console.log(`🔄 Generating Q&A pairs from content (${scrapedContent.content.length} chars, ${scrapedContent.headings.length} headings)`)
-    const qaPairs = generateQAPairsFromContent(scrapedContent, {
-      maxPairs: options?.maxPairs || 50,
-      minAnswerLength: options?.minAnswerLength || 20,
-    })
-    console.log(`✅ Generated ${qaPairs.length} Q&A pairs`)
-
+    const startData = await scrapeResponse.json()
+    
+    // Return the task ID for the frontend to poll
     return res.status(200).json({
       success: true,
-      data: {
-        title: scrapedContent.title,
-        content: scrapedContent.content, // Full content - NO CHARACTER LIMIT!
-        url: scrapedContent.url,
-        headings: scrapedContent.headings,
-        metadata: scrapedContent.metadata,
-        qaPairs: qaPairs, // Keep for backward compatibility
-        tempAgentId: tempAgentId, // Return temp ID for content storage
-        stats: {
-          totalCharacters: scrapeData.data.stats?.totalCharacters || scrapedContent.content.length,
-          headingsCount: scrapeData.data.stats?.headingsCount || scrapedContent.headings.length,
-          qaPairsCount: qaPairs.length,
-          totalPages: scrapeData.data.stats?.totalPages || 1,
-          sitemapUrls: scrapeData.data.stats?.sitemapUrls || 0,
-        },
-        pages: scrapeData.data.pages || [],
-      }
+      async: true,
+      taskId: startData.task_id,
+      tempAgentId: tempAgentId,
+      status: 'processing'
     })
+
   } catch (error: any) {
-    console.error('Scraping error:', error)
-
-    if (error.message?.includes('ECONNREFUSED') || error.message?.includes('fetch failed') || error.message?.includes('SERVICE_OFFLINE')) {
-      return res.status(503).json({
-        error: 'AI backend service is offline.',
-        message: 'The LLM service is not running. Please start the Python backend before creating an agent.',
-        code: 'SERVICE_OFFLINE',
-      })
-    }
-
+    console.error('Async Scrape Start Error:', error)
     return res.status(500).json({
-      error: 'Failed to scrape URL',
+      error: 'Failed to start scraping',
       message: error.message || 'Unknown error occurred'
     })
   }

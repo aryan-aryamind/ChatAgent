@@ -7,7 +7,7 @@ if sys.platform == "win32":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
-from fastapi import FastAPI, HTTPException, UploadFile, File as FastAPIFile, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File as FastAPIFile, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
@@ -50,6 +50,10 @@ logging.getLogger("transformers").setLevel(logging.WARNING)
 logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
 
 app = FastAPI(title="CrewAI Chat Service")
+
+# Global dict for tracking long-running scrape tasks
+# task_id -> {"status": "processing" | "completed" | "error", "data": {...}, "error": "..."}
+scrape_tasks: Dict[str, Any] = {}
 
 # CORS middleware
 app.add_middleware(
@@ -916,29 +920,11 @@ async def update_agent_settings(request: UpdateSettingsRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/scrape", response_model=ScrapeResponse)
-async def scrape(request: ScrapeRequest):
-    """
-    Scrape a website using AsyncWebsiteScraper.
-    Supports multi-page crawling with configurable limits.
-    """
+async def perform_scraping_task(task_id: str, request: ScrapeRequest):
+    """Background task to perform the full scraping and indexing process."""
     try:
-        if not request.url or not request.url.strip():
-            raise HTTPException(status_code=400, detail="URL is required")
-
-        # Normalize URL
-        url = request.url.strip()
-        if not url.startswith(("http://", "https://")):
-            url = f"https://{url}"
-
-        # Validate URL format
-        parsed = urlparse(url)
-        if not parsed.netloc or "." not in parsed.netloc or " " in parsed.netloc:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid URL format. Please provide a valid website address (e.g., techifyhub.in).",
-            )
-
+        print(f"🚀 Starting background scrape task: {task_id} for {request.url}")
+        
         # Create scrape options
         scrape_options = AsyncScrapeOptions(
             max_pages=request.max_pages or 100,
@@ -951,29 +937,24 @@ async def scrape(request: ScrapeRequest):
         )
 
         # Initialize scraper
-        scraper = AsyncWebsiteScraper(base_url=url, options=scrape_options)
+        scraper = AsyncWebsiteScraper(base_url=request.url, options=scrape_options)
+        url = request.url
 
-        # 1. First, try a quick single-page check with Playwright for link discovery if it looks JS-heavy
-        # Or if we just want to be extra sure for the root page
+        # 1. First, try a quick single-page check with Playwright
         initial_page = None
         try:
             from scraper.playwright_scraper import PlaywrightScraper
-
-            pw = PlaywrightScraper(
-                timeout=45, page_timeout=45000, wait_until="networkidle"
-            )
+            pw = PlaywrightScraper(timeout=45, page_timeout=45000, wait_until="networkidle")
             if pw.is_available():
                 print(f"🎭 [Initial Discovery] Using Playwright for: {url}")
                 initial_page = await pw.scrape(url)
                 if initial_page:
-                    print(
-                        f"✅ Discovered {len(initial_page.links)} links with Playwright"
-                    )
+                    print(f"✅ Discovered {len(initial_page.links)} links with Playwright")
                 await pw.close()
         except Exception as e:
             print(f"⚠️  Playback discovery failed: {e}")
 
-        # 2. Run the full crawl (using initial_page for better links if found)
+        # 2. Run the full crawl
         print(f"🌐 Starting crawl for: {url}")
         scraped_content = await scraper.run(initial_page=initial_page)
 
@@ -985,31 +966,25 @@ async def scrape(request: ScrapeRequest):
                 all_content.append(page.main_content)
             for heading in page.headings:
                 if isinstance(heading, dict) and heading.get("text"):
-                    all_headings.append(
-                        {
-                            "level": heading.get("level", "h1"),
-                            "text": heading.get("text", ""),
-                            "id": heading.get("id", ""),
-                        }
-                    )
+                    all_headings.append({
+                        "level": heading.get("level", "h1"),
+                        "text": heading.get("text", ""),
+                        "id": heading.get("id", ""),
+                    })
 
         combined_content = "\n\n".join(all_content)
 
         # Prepare response data
         response_data = {
             "url": url,
-            "title": (
-                scraped_content.pages[0].title
-                if scraped_content.pages
-                else "Scraped Website"
-            ),
+            "title": (scraped_content.pages[0].title if scraped_content.pages else "Scraped Website"),
             "content": combined_content,
             "headings": all_headings,
             "pages": [
                 {
                     "url": page.url,
                     "title": page.title,
-                    "content": page.main_content,  # Include content in each page
+                    "content": page.main_content,
                     "headings": page.headings,
                     "paragraphs": page.paragraphs,
                     "images": page.images,
@@ -1033,30 +1008,15 @@ async def scrape(request: ScrapeRequest):
             "persona_type": request.persona_type or "general",
         }
 
-        # 🧪 Extract dynamic Business Context from content
+        # 🧪 Extract dynamic Business Context
         try:
             temp_synthesizer = SynthesisAgent(llm_agent=llm_agent)
-
-            # Create an identity context from the home page or base URL
-            home_page = None
-            for page in scraped_content.pages:
-                if page.url.rstrip("/") == url.rstrip("/"):
-                    home_page = page
-                    break
+            home_page = next((p for p in scraped_content.pages if p.url.rstrip("/") == url.rstrip("/")), None)
             if not home_page and scraped_content.pages:
-                home_page = scraped_content.pages[0]  # Fallback to first page
-
-            site_info = None
-            if home_page:
-                site_info = {
-                    "url": home_page.url,
-                    "title": home_page.title,
-                    "description": home_page.meta_description,
-                }
-
-            extracted_context = temp_synthesizer.extract_business_context(
-                combined_content, site_info=site_info
-            )
+                home_page = scraped_content.pages[0]
+            
+            site_info = {"url": home_page.url, "title": home_page.title, "description": home_page.meta_description} if home_page else None
+            extracted_context = temp_synthesizer.extract_business_context(combined_content, site_info=site_info)
             response_data["business_context"] = extracted_context
             print(f"🏢 Extracted Business Context: {extracted_context}")
         except Exception as e:
@@ -1069,108 +1029,83 @@ async def scrape(request: ScrapeRequest):
                 content_storage.save_content(request.agent_id, response_data)
                 print(f"💾 Saved content for agent: {request.agent_id}")
 
-                # Automatically index content into RAG vector store
                 if combined_content and len(combined_content.strip()) > 100:
                     try:
-                        # Validate content is readable text (not binary/garbled)
                         def is_readable_text(text: str) -> bool:
-                            """Check if text is readable (not binary/garbled)"""
-                            if not text:
-                                return False
-                            # Check if text contains mostly printable ASCII/Unicode characters
-                            printable_ratio = sum(
-                                1 for c in text[:1000] if c.isprintable() or c.isspace()
-                            ) / min(len(text), 1000)
-                            # Check for excessive non-ASCII characters that might indicate binary data
-                            non_ascii_ratio = sum(
-                                1 for c in text[:1000] if ord(c) > 127
-                            ) / min(len(text), 1000)
-                            # Text should be mostly printable and not too many high-unicode chars
+                            if not text: return False
+                            printable_ratio = sum(1 for c in text[:1000] if c.isprintable() or c.isspace()) / min(len(text), 1000)
+                            non_ascii_ratio = sum(1 for c in text[:1000] if ord(c) > 127) / min(len(text), 1000)
                             return printable_ratio > 0.7 and non_ascii_ratio < 0.5
 
                         print(f"🔄 Indexing scraped content into RAG vector store...")
-                        rag_agent = RAGAgent(
-                            agent_id=request.agent_id, llm_agent=llm_agent
-                        )
-
-                        # Clear old index first to ensure a fresh, complete rebuild
+                        rag_agent = RAGAgent(agent_id=request.agent_id, llm_agent=llm_agent)
                         rag_agent.doc_store.delete_index()
-                        print(f"🗑️  Cleared old RAG index for fresh rebuild.")
-
-                        # Prepare pages for indexing (filter out garbled content)
+                        
                         pages_for_indexing = []
                         for page in scraped_content.pages:
                             page_content = page.main_content or ""
-
-                            # Validate content is readable
                             page_url_lower = (page.url or "").lower().rstrip("/")
-                            is_info_page = any(
-                                w in page_url_lower
-                                for w in [
-                                    "contact",
-                                    "about",
-                                    "support",
-                                    "headquarter",
-                                    "location",
-                                ]
-                            )
+                            is_info_page = any(w in page_url_lower for w in ["contact", "about", "support", "headquarter", "location"])
                             min_len = 15 if is_info_page else 50
 
-                            if page_content and len(page_content.strip()) > min_len:
-                                if is_readable_text(page_content):
-                                    pages_for_indexing.append(
-                                        {
-                                            "url": page.url,
-                                            "title": page.title or "Untitled",
-                                            "main_content": page_content,
-                                            "headings": page.headings,
-                                            "paragraphs": page.paragraphs,
-                                            "images": page.images,
-                                            "meta_description": page.meta_description,
-                                        }
-                                    )
-                                else:
-                                    print(
-                                        f"⚠️  Skipping page {page.url}: content appears to be binary/garbled"
-                                    )
-
-                        # If we have valid pages, index them
+                            if page_content and len(page_content.strip()) > min_len and is_readable_text(page_content):
+                                pages_for_indexing.append({
+                                    "url": page.url, "title": page.title or "Untitled", "main_content": page_content,
+                                    "headings": page.headings, "paragraphs": page.paragraphs, "images": page.images,
+                                    "meta_description": page.meta_description,
+                                })
+                        
                         if pages_for_indexing:
-                            # Use thread pool to prevent blocking the event loop during heavy CPU indexing
                             from anyio import to_thread
                             indexing_stats = await to_thread.run_sync(rag_agent.index_content, pages_for_indexing)
-                            print(
-                                f"✅ RAG indexing complete: {indexing_stats['chunks_indexed']} chunks indexed from {indexing_stats['pages_indexed']} pages"
-                            )
-                        else:
-                            print(
-                                f"⚠️  No valid pages to index (all content too short, empty, or garbled)"
-                            )
-                            print(
-                                f"   Content preview: {combined_content[:200] if combined_content else 'None'}"
-                            )
+                            print(f"✅ RAG indexing complete for {task_id}")
                     except Exception as e:
-                        print(f"⚠️  Warning: Failed to index content into RAG: {e}")
-                        import traceback
-
-                        print(traceback.format_exc())
+                        print(f"⚠️  Failed to index content: {e}")
             except Exception as e:
-                print(f"⚠️  Warning: Failed to save content: {e}")
+                print(f"⚠️  Failed to save content: {e}")
 
-        print(
-            f"✅ Scraping completed: {scraped_content.total_pages} pages, {len(combined_content)} characters"
-        )
+        # Task complete!
+        scrape_tasks[task_id] = {"status": "completed", "data": response_data, "error": None}
+        print(f"🏁 Background scrape task {task_id} completed successfully.")
 
-        return ScrapeResponse(success=True, data=response_data)
-
-    except HTTPException:
-        raise
     except Exception as e:
+        print(f"❌ Error in background scrape task {task_id}: {str(e)}")
         import traceback
+        print(traceback.format_exc())
+        scrape_tasks[task_id] = {"status": "error", "data": None, "error": str(e)}
 
-        error_detail = f"{str(e)}\n{traceback.format_exc()}"
-        print(f"❌ Error in /scrape endpoint: {error_detail}")
-        raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
+
+@app.post("/scrape")
+async def scrape(request: ScrapeRequest, background_tasks: BackgroundTasks):
+    try:
+        if not request.url or not request.url.strip():
+            raise HTTPException(status_code=400, detail="URL is required")
+
+        url = request.url.strip()
+        if not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
+
+        # Initialize tracking
+        import uuid
+        task_id = str(uuid.uuid4())
+        scrape_tasks[task_id] = {"status": "processing", "data": None, "error": None}
+
+        # Start background task
+        background_tasks.add_task(perform_scraping_task, task_id, request)
+
+        return {"success": True, "task_id": task_id, "status": "processing"}
+
+    except Exception as e:
+        print(f"❌ Error starting scrape: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/scrape-status/{task_id}")
+async def get_scrape_status(task_id: str):
+    if task_id not in scrape_tasks:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    return scrape_tasks[task_id]
 
 
 @app.post("/process-file")
