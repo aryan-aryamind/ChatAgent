@@ -47,8 +47,8 @@ export async function scrapeURL(url: string): Promise<ScrapedContent> {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
       },
-      // Timeout after 30 seconds
-      signal: AbortSignal.timeout(30000),
+      // Timeout after 10 minutes
+      signal: AbortSignal.timeout(600000),
     })
 
     if (!response.ok) {

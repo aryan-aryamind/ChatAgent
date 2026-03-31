@@ -15,7 +15,7 @@ export default async function handler(
   if (!url) {
     return res.status(400).json({ error: 'URL is required' })
   }
-  
+
   // Allow 'new' as agent ID for agent creation flow
   if (!id || (id !== 'new' && typeof id !== 'string')) {
     return res.status(400).json({ error: 'Valid agent ID is required' })
@@ -32,7 +32,11 @@ export default async function handler(
 
     // === HEALTH CHECK: Ensure LLM backend is online before proceeding ===
     try {
-      const healthRes = await fetch(`${crewaiServiceUrl}/health`, { method: 'GET', signal: AbortSignal.timeout(4000) })
+      // Increased timeout to 10 minutes to allow for very busy backend
+      const healthRes = await fetch(`${crewaiServiceUrl}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(600000)
+      })
       if (!healthRes.ok) {
         throw new Error('unhealthy')
       }
@@ -40,22 +44,24 @@ export default async function handler(
       console.error('❌ CrewAI backend is offline — blocking scrape/agent creation')
       return res.status(503).json({
         error: 'AI backend service is currently offline.',
-        message: 'The LLM/AI service is not running. Please start the backend service before creating an agent. Agent creation requires a live AI backend to process and learn from your content.',
+        message: 'The LLM/AI service is not running or is too busy. Please ensure the backend service is started. Agent creation requires a live AI backend to process and learn from your content.',
         code: 'SERVICE_OFFLINE',
       })
     }
 
     // Call Python scraping service
     console.log(`🌐 Calling Python scraper service for: ${validUrl}`)
-    
+
     // Generate temporary agent ID (hash of URL + timestamp for uniqueness)
     const tempAgentId = `temp-${Buffer.from(validUrl).toString('base64').slice(0, 20)}-${Date.now()}`
-    
+
+    // Increased timeout for the main scrape request (10 minutes as requested by user)
     const scrapeResponse = await fetch(`${crewaiServiceUrl}/scrape`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(600000), // 10 minutes timeout
       body: JSON.stringify({
         url: validUrl,
         agent_id: tempAgentId, // Save content with temporary ID
@@ -73,7 +79,7 @@ export default async function handler(
     }
 
     const scrapeData = await scrapeResponse.json()
-    
+
     console.log('📥 Python scraper response:', {
       success: scrapeData.success,
       hasData: !!scrapeData.data,
@@ -82,7 +88,7 @@ export default async function handler(
       headingsCount: scrapeData.data?.headings?.length || 0,
       pagesCount: scrapeData.data?.pages?.length || 0
     })
-    
+
     if (!scrapeData.success || !scrapeData.data) {
       console.error('❌ Python scraper returned unsuccessful response:', scrapeData)
       throw new Error('Python scraper returned unsuccessful response')

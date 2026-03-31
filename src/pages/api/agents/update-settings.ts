@@ -43,6 +43,7 @@ export default async function handler(
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                signal: AbortSignal.timeout(600000),
                 body: JSON.stringify({
                     agent_id: agentId,
                     persona_type: agentInstructions,

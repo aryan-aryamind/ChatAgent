@@ -1136,7 +1136,9 @@ async def scrape(request: ScrapeRequest):
 
                         # If we have valid pages, index them
                         if pages_for_indexing:
-                            indexing_stats = rag_agent.index_content(pages_for_indexing)
+                            # Use thread pool to prevent blocking the event loop during heavy CPU indexing
+                            from anyio import to_thread
+                            indexing_stats = await to_thread.run_sync(rag_agent.index_content, pages_for_indexing)
                             print(
                                 f"✅ RAG indexing complete: {indexing_stats['chunks_indexed']} chunks indexed from {indexing_stats['pages_indexed']} pages"
                             )

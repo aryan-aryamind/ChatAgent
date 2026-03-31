@@ -51,6 +51,7 @@ export default async function handler(
 
     const processResponse = await fetch(`${crewaiServiceUrl}/process-file`, {
       method: 'POST',
+      signal: AbortSignal.timeout(600000),
       body: formData,
     })
 

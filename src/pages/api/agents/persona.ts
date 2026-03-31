@@ -19,7 +19,9 @@ export default async function handler(
             url = `${crewaiServiceUrl}/persona-templates/${type}`
         }
 
-        const response = await fetch(url)
+        const response = await fetch(url, {
+            signal: AbortSignal.timeout(600000)
+        })
 
         if (!response.ok) {
             return res.status(response.status).json({ error: 'Backend error', details: await response.text() })

@@ -83,6 +83,7 @@ export default async function handler(
       const ragResponse = await fetch(`${crewaiServiceUrl}/chat-content`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(600000),
         body: JSON.stringify({
           message: message,
           agent_id: id,

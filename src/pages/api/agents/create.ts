@@ -21,7 +21,10 @@ export default async function handler(
 
         // === HEALTH CHECK: block agent creation if LLM service is down ===
         try {
-            const healthRes = await fetch(`${crewaiServiceUrl}/health`, { method: 'GET', signal: AbortSignal.timeout(180000) })
+            const healthRes = await fetch(`${crewaiServiceUrl}/health`, { 
+                method: 'GET', 
+                signal: AbortSignal.timeout(600000) 
+            })
             if (!healthRes.ok) throw new Error('unhealthy')
         } catch {
             console.error('❌ CrewAI backend offline — blocking agent creation')
