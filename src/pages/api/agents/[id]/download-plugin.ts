@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import prisma from '../../../../lib/prisma';
+import { prisma } from '../../../../lib/prisma';
 import fs from 'fs';
 import path from 'path';
 import AdmZip from 'adm-zip';
@@ -43,10 +43,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 5. Create a ZIP file on the fly
     const zip = new AdmZip();
-    
+
     // Add the modified PHP file to the ZIP
     zip.addFile('ai-agent-wordpress-plugin/ai-agent-wordpress-plugin.php', Buffer.from(phpContent, 'utf8'));
-    
+
     // Optionally add a readme if it exists
     const readmePath = path.join(process.cwd(), 'public', 'readme.txt');
     if (fs.existsSync(readmePath)) {
