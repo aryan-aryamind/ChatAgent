@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sidebar } from '@/app/components/dashboard/sidebar'
 import { PageHeader } from '@/app/components/page-header'
 import { Button } from '@/app/components/ui/button'
@@ -8,7 +8,13 @@ import { toast } from 'sonner'
 
 export default function ApiDocsPage() {
   const router = useRouter()
+  const [baseUrl, setBaseUrl] = useState('')
   const [copiedBlock, setCopiedBlock] = useState<string | null>(null)
+
+  // Get current base URL on mount
+  useEffect(() => {
+    setBaseUrl(window.location.origin)
+  }, [])
 
   const handleCopy = (text: string, blockId: string) => {
     navigator.clipboard.writeText(text)
@@ -93,7 +99,7 @@ export default function ApiDocsPage() {
 
                 <div className="bg-card border rounded-xl overflow-hidden">
                   <div className="px-6 py-4 border-b bg-muted/20 font-semibold text-sm">Request Body</div>
-                  <div className="p-6 overflow-x-auto">
+                  <div className="p-6 overflow-x-auto text-white">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-muted-foreground">
@@ -105,20 +111,78 @@ export default function ApiDocsPage() {
                       </thead>
                       <tbody className="divide-y divide-border">
                         <tr>
-                          <td className="py-4 font-mono text-primary">message</td>
+                          <td className="py-4 font-mono text-primary font-bold">message</td>
                           <td className="py-4 font-mono text-muted-foreground">string</td>
                           <td className="py-4 text-green-400">Yes</td>
                           <td className="py-4 text-muted-foreground">The user's input message to the agent.</td>
                         </tr>
                         <tr>
-                          <td className="py-4 font-mono text-primary">history</td>
+                          <td className="py-4 font-mono text-primary font-bold">history</td>
                           <td className="py-4 font-mono text-muted-foreground">array</td>
                           <td className="py-4">No</td>
-                          <td className="py-4 text-muted-foreground">Previous message objects for context.</td>
+                          <td className="py-4 text-muted-foreground">Previous message objects for context. Format: <code>[&#123; "role": "user", "content": "..." &#125;]</code>.</td>
                         </tr>
                       </tbody>
                     </table>
                   </div>
+                </div>
+
+                <div className="bg-card border rounded-xl overflow-hidden mt-6">
+                  <div className="px-6 py-4 border-b bg-muted/20 font-semibold text-sm">Response Format</div>
+                  <div className="p-6 bg-black/40 font-mono text-xs text-slate-300">
+                    <pre>
+                      {`{
+  "reply": "The response from the AI",
+  "agentName": "Customer Support",
+  "agentId": "cmmj...",
+  "usage": "24/1000"
+}`}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Error Codes Section */}
+            <section id="error-handling">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  < ShieldCheck className="h-6 w-6 text-primary" />
+                </div>
+                <h2 className="text-2xl font-bold">Error Codes</h2>
+              </div>
+              <p className="text-muted-foreground mb-6">
+                Understand the responses when things don't go as planned.
+              </p>
+              
+              <div className="bg-card border rounded-xl overflow-hidden">
+                <div className="p-6 overflow-x-auto text-white">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-muted-foreground">
+                        <th className="text-left pb-4 font-medium">HTTP Code</th>
+                        <th className="text-left pb-4 font-medium">Error Code</th>
+                        <th className="text-left pb-4 font-medium">Description</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      <tr>
+                        <td className="py-4 font-mono text-red-400">401</td>
+                        <td className="py-4 font-mono text-primary font-bold">INVALID_KEY</td>
+                        <td className="py-4 text-muted-foreground">The provided API key is invalid or has been revoked.</td>
+                      </tr>
+                      <tr>
+                        <td className="py-4 font-mono text-red-400">403</td>
+                        <td className="py-4 font-mono text-primary font-bold">QUOTA_EXCEEDED</td>
+                        <td className="py-4 text-muted-foreground">Usage limit (1,000 requests) exceeded for the Free plan.</td>
+                      </tr>
+                      <tr>
+                        <td className="py-4 font-mono text-red-400">403</td>
+                        <td className="py-4 font-mono text-primary font-bold">TRIAL_EXPIRED</td>
+                        <td className="py-4 text-muted-foreground">Free trial limit (3 days) has expired. Upgrade your plan.</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </section>
@@ -143,7 +207,7 @@ export default function ApiDocsPage() {
                       size="icon" 
                       variant="ghost" 
                       className="absolute right-3 top-3 transition-opacity h-8 w-8 text-muted-foreground hover:text-primary"
-                      onClick={() => handleCopy(`curl -X POST http://localhost:3006/api/v1/chat \\
+                      onClick={() => handleCopy(`curl -X POST ${baseUrl || 'https://chatbotagent.shwetatech.com'}/api/v1/chat \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: YOUR_API_KEY" \\
   -d '{"message": "Hello!"}'`, 'curl')}
@@ -151,7 +215,7 @@ export default function ApiDocsPage() {
                       {copiedBlock === 'curl' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                     </Button>
                     <pre className="text-slate-300">
-                      {`curl -X POST http://localhost:3006/api/v1/chat \\
+                      {`curl -X POST ${baseUrl || 'https://chatbotagent.shwetatech.com'}/api/v1/chat \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: YOUR_API_KEY" \\
   -d '{"message": "Hello!"}'`}
@@ -159,7 +223,7 @@ export default function ApiDocsPage() {
                   </div>
                 </div>
 
-                <div>
+                 <div>
                   <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
                     <span className="text-xs px-2 py-0.5 bg-muted rounded border uppercase text-muted-foreground">JS</span>
                     JavaScript (Fetch)
@@ -169,7 +233,7 @@ export default function ApiDocsPage() {
                       size="icon" 
                       variant="ghost" 
                       className="absolute right-3 top-3 transition-opacity h-8 w-8 text-muted-foreground hover:text-primary"
-                      onClick={() => handleCopy(`const response = await fetch('/api/v1/chat', {
+                      onClick={() => handleCopy(`const response = await fetch('${baseUrl || 'https://chatbotagent.shwetatech.com'}/api/v1/chat', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -187,7 +251,7 @@ console.log(data.reply);`, 'js')}
                       {copiedBlock === 'js' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                     </Button>
                     <pre className="text-slate-300">
-                      {`const response = await fetch('/api/v1/chat', {
+                      {`const response = await fetch('${baseUrl || 'https://chatbotagent.shwetatech.com'}/api/v1/chat', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -205,6 +269,44 @@ console.log(data.reply);`}
                   </div>
                 </div>
               </div>
+            {/* WordPress Integration Section */}
+            <section id="wordpress-integration">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Code className="h-6 w-6 text-primary" />
+                </div>
+                <h2 className="text-2xl font-bold">WordPress Integration</h2>
+              </div>
+              <p className="text-muted-foreground mb-6">
+                Connect your AI agents to WordPress instantly using our dedicated plugin.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-6 rounded-xl border bg-card/50">
+                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-primary text-white text-[10px] flex items-center justify-center">1</span>
+                    Dynamic Download
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Generate a pre-configured <code>.zip</code> file directly from your agent's dashboard. It includes your Agent ID and Base URL automatically.
+                  </p>
+                </div>
+                <div className="p-6 rounded-xl border bg-card/50">
+                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-primary text-white text-[10px] flex items-center justify-center">2</span>
+                    Instant Activation
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Upload the <code>.zip</code> to your WordPress Plugins section, activate it, and your chatbot will appear instantly.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 p-4 bg-primary/5 border border-primary/20 rounded-lg text-sm text-primary italic">
+                <strong>Tip:</strong> The plugin is fully white-labeled and uses a floating widget that stays synced with your dashboard settings.
+              </div>
+            </section>
+
+            {/* Implementation Examples Section ends here, added above */}
             </section>
 
             {/* Best Practices */}

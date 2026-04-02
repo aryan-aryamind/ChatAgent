@@ -91,9 +91,9 @@ export function DeployTab({ agentId }: DeployTabProps) {
       id: 'wordpress',
       icon: Globe,
       name: 'WordPress Plugin',
-      description: 'Add chatbot to your WordPress site with our custom plugin',
+      description: 'Add chatbot to your WordPress site with our custom plugin (pre-configured ZIP)',
       status: 'enabled',
-      url: `${baseUrl}/ai-agent-wordpress-plugin.php`,
+      url: agentId ? `/api/agents/${agentId}/download-plugin` : null,
       color: 'primary',
     },
     {
@@ -448,74 +448,107 @@ export function DeployTab({ agentId }: DeployTabProps) {
       {/* WordPress Configuration Modal */}
       {showWordPressConfig && (
         <Dialog open={showWordPressConfig} onOpenChange={setShowWordPressConfig}>
-          <DialogContent className="max-w-md w-full">
+          <DialogContent className="max-w-lg w-full">
             <DialogHeader>
-              <DialogTitle>WordPress Configuration</DialogTitle>
+              <DialogTitle>WordPress Plugin Setup</DialogTitle>
               <DialogDescription>
-                Copy these values into your WordPress plugin settings.
+                Follow these steps to add your chatbot to WordPress.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-6 mt-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-text-secondary">Agent ID</label>
-                <div className="flex gap-2">
-                  <Input
-                    value={agentId}
-                    readOnly
-                    className="bg-secondary font-mono text-xs"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      navigator.clipboard.writeText(agentId || '');
-                      toast.success('Agent ID copied');
-                    }}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
+            <div className="space-y-5 mt-4">
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-text-secondary">Bot URL</label>
-                <div className="flex gap-2">
-                  <Input
-                    value={baseUrl}
-                    readOnly
-                    className="bg-secondary font-mono text-xs"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      navigator.clipboard.writeText(baseUrl);
-                      toast.success('Bot URL copied');
-                    }}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
+              {/* Step 1 – Download */}
+              <div className="rounded-xl border border-border p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shrink-0">1</span>
+                  <p className="text-sm font-semibold">Download your personalized <code className="text-primary text-xs">.zip</code></p>
                 </div>
-              </div>
-
-              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                <p className="text-xs text-primary leading-relaxed">
-                  <strong>Instructions:</strong> Go to your WordPress Admin {'>'} AI Agent menu and paste these values. Your chatbot will then appear on your site.
+                <Button
+                  variant="outline"
+                  className="w-full justify-between bg-primary/5 border-primary/30 hover:bg-primary/10"
+                  onClick={() => {
+                    if (!agentId) return;
+                    window.location.href = `/api/agents/${agentId}/download-plugin`;
+                  }}
+                  type="button"
+                >
+                  <span className="truncate font-mono text-xs">ai-agent-plugin.zip</span>
+                  <ExternalLink className="h-4 w-4 shrink-0 text-primary" />
+                </Button>
+                <p className="text-xs text-green-500 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
+                  ✨ <strong>Success:</strong> This ZIP is already pre-configured with your Agent ID and Bot URL!
                 </p>
               </div>
 
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-text-secondary">Download Plugin</label>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between"
-                  onClick={() => window.open(`${baseUrl}/ai-agent-wordpress-plugin.php`, '_blank')}
-                >
-                  <span className="truncate">ai-agent-wordpress-plugin.php</span>
-                  <ExternalLink className="h-4 w-4 shrink-0" />
-                </Button>
+              {/* Step 2 – Install */}
+              <div className="rounded-xl border border-border p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shrink-0">2</span>
+                  <p className="text-sm font-semibold">Install the plugin in WordPress</p>
+                </div>
+                <ol className="text-xs text-text-secondary space-y-1 pl-8 list-decimal">
+                  <li>Go to your <strong>WordPress Admin Panel</strong></li>
+                  <li>Navigate to <strong>Plugins → Add New</strong></li>
+                  <li>Click <strong>"Upload Plugin"</strong> at the top</li>
+                  <li>Choose the <code>.zip</code> file you downloaded</li>
+                  <li>Click <strong>"Install Now"</strong> then <strong>"Activate Plugin"</strong></li>
+                </ol>
               </div>
+
+              {/* Step 3 – Configure */}
+              <div className="rounded-xl border border-border p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shrink-0">3</span>
+                  <p className="text-sm font-semibold">Paste your Agent ID &amp; Bot URL</p>
+                </div>
+                <p className="text-xs text-text-secondary pl-8">After activating, go to <strong>AI Agent</strong> in the WordPress sidebar and paste these values:</p>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-text-secondary">Agent ID</label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={agentId}
+                      readOnly
+                      className="bg-secondary font-mono text-xs"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        navigator.clipboard.writeText(agentId || '');
+                        toast.success('Agent ID copied!');
+                      }}
+                      type="button"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-text-secondary">Bot URL</label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={baseUrl}
+                      readOnly
+                      className="bg-secondary font-mono text-xs"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        navigator.clipboard.writeText(baseUrl);
+                        toast.success('Bot URL copied!');
+                      }}
+                      type="button"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
             </div>
 
             <div className="flex justify-end mt-6">
