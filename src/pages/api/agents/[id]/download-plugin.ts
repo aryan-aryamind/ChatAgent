@@ -24,7 +24,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // 2. Determine base URL (priority: ENV > Request Host)
     const protocol = req.headers['x-forwarded-proto'] || 'http';
     const host = req.headers.host;
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
+    let baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
+    
+    // Ensure baseUrl doesn't have a trailing slash for consistent replacement
+    baseUrl = baseUrl.replace(/\/$/, '');
 
     // 3. Read the PHP plugin template
     // Note: Moving template to an internal folder ensures it's bundled in production

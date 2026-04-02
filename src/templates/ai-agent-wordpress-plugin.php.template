@@ -133,10 +133,13 @@ function ai_agent_get_chatbot_html() {
         return '<!-- AI Agent: Please configure Agent ID and Bot URL in settings -->';
     }
 
-    $embed_url = $base_url . '/chatbot/' . $agent_id;
+    $embed_url = rtrim($base_url, '/') . '/chatbot/' . $agent_id;
     
-    // Add version to URL for cache busting
-    $embed_url = add_query_arg('v', time(), $embed_url);
+    // Add essential query parameters
+    $embed_url = add_query_arg(array(
+        'v' => time(),
+        'view' => 'widget'
+    ), $embed_url);
 
     ob_start();
     ?>
