@@ -93,9 +93,13 @@ export function AgentCreationStep4() {
     }
 
     // Set expiration based on user plan (Extended to 7 days for FREE agents)
-    const expiresAt = (session?.user as any)?.plan === 'FREE'
-      ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-      : null;
+    // ADMIN agents never expire
+    const isAdmin = (session?.user as any)?.role === 'ADMIN';
+    const isFree = (session?.user as any)?.plan === 'FREE';
+
+    const expiresAt = isAdmin
+      ? null
+      : (isFree ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null);
 
     // Call real API to create agent in database
     let createdAgent;

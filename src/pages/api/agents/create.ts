@@ -58,7 +58,7 @@ export default async function handler(
                 conversations: conversations || 0,
                 sources: sources || 0,
                 qaPairs,
-                expiresAt: expiresAt ? new Date(expiresAt) : null,
+                expiresAt: (session.user as any).role === 'ADMIN' ? null : (expiresAt ? new Date(expiresAt) : null),
                 image,
                 initialMessage
             } as any
