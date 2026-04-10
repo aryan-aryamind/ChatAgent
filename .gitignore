@@ -22,7 +22,6 @@ yarn-error.log*
 *.pem
 
 # Environment files
-.env
 .env*.local
 
 # Vercel
@@ -131,3 +130,4 @@ assets/
 .cursor/
 # Backups
 /backups/
+config.bat

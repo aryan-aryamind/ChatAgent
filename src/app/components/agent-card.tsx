@@ -201,14 +201,14 @@ export function AgentCard({
         <div className="flex items-center gap-2 mb-4">
           {(() => {
             const isExpired = expiresAt && new Date() > new Date(expiresAt);
-            const displayStatus = (!isAdminView && isExpired) ? "Active to Expire" : status;
+            const displayStatus = isExpired ? "expired" : status;
             
             return (
               <div
                 className={cn(
                   "flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full",
                   displayStatus === "active" ? "bg-success/10 text-success" :
-                    (displayStatus === "hidden" || displayStatus === "Active to Expire") ? "bg-amber-500/10 text-amber-500" :
+                    (displayStatus === "hidden") ? "bg-amber-500/10 text-amber-500" :
                       "bg-red-500/10 text-red-500"
                 )}
               >
@@ -216,7 +216,7 @@ export function AgentCard({
                   className={cn(
                     "w-1.5 h-1.5 rounded-full",
                     displayStatus === "active" ? "bg-success" :
-                      (displayStatus === "hidden" || displayStatus === "Active to Expire") ? "bg-amber-500" :
+                      (displayStatus === "hidden") ? "bg-amber-500" :
                         "bg-red-500"
                   )}
                 />
