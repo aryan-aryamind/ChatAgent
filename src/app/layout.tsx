@@ -1,4 +1,6 @@
+import { Suspense } from 'react'
 import { Providers } from './providers'
+import { GoogleAnalytics, AppRouterPageView } from '@/app/components/analytics'
 import '@/styles/index.css'
 
 export const metadata = {
@@ -14,6 +16,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
+        <GoogleAnalytics />
+        <Suspense fallback={null}>
+          <AppRouterPageView />
+        </Suspense>
         <Providers>{children}</Providers>
       </body>
     </html>

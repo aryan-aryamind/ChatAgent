@@ -8,6 +8,7 @@ import { AgentsProvider } from '@/contexts/AgentsContext'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ChatProvider } from '@/contexts/ChatContext'
 import { ChatWidget } from '@/app/components/chat-widget/chat-widget'
+import { GoogleAnalytics, PagesRouterPageView } from '@/app/components/analytics'
 import '@/styles/index.css'
 
 export default function App({ Component, pageProps }: AppProps) {
@@ -21,6 +22,8 @@ export default function App({ Component, pageProps }: AppProps) {
 
   return (
     <>
+      <GoogleAnalytics />
+      <PagesRouterPageView />
       <Head>
         <title>TheChatAgent | Custom AI Support Bots</title>
         <meta name="description" content="Build your custom AI support agent tailored for your business in minutes. Ensure secure, 24/7 instant customer support with TheChatAgent." />
