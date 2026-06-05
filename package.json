@@ -3,9 +3,9 @@
   "private": true,
   "version": "0.0.1",
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS='--max-old-space-size=4096' next dev -p 3006",
-    "build": "next build",
-    "start": "next start -p 3006",
+    "dev": "node init && cross-env NODE_OPTIONS='--max-old-space-size=4096' next dev -p 3006",
+    "build": "node init && next build",
+    "start": "node init && next start -p 3006",
     "lint": "next lint",
     "db:backup": "node scripts/db-backup.js"
   },

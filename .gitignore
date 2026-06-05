@@ -22,7 +22,6 @@ yarn-error.log*
 *.pem
 
 # Environment files
-.env
 .env*.local
 
 # Vercel
@@ -78,7 +77,6 @@ crewai-service/vector_storage/*
 *.log
 
 # IDE/editor files (optional, add your own if needed)
-.vscode/
 .idea/
 *.sublime-project
 *.sublime-workspace
@@ -131,3 +129,4 @@ assets/
 .cursor/
 # Backups
 /backups/
+config.bat
